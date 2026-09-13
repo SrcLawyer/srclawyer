@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:corpus": "tsx scripts/scoreCorpus.ts",
     "test:corpus:update-baseline": "tsx scripts/scoreCorpus.ts --update-baseline",
+    "test:corpus:with-llm": "node --env-file=.env node_modules/.bin/tsx scripts/scoreCorpus.ts --with-llm",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

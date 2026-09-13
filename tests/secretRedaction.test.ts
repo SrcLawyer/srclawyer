@@ -13,6 +13,19 @@ describe("secretRedaction", () => {
     expect(redactSecrets(source)).not.toContain("AKIAABCDEFGHIJKLMNOP");
   });
 
+  it("redacts an Anthropic API key under a generic variable name, not just apiKey/secret/token", () => {
+    const source = 'const key = "sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE-FAKEFAKEFAKEFAKEFAKEAA";';
+    const redacted = redactSecrets(source);
+    expect(redacted).not.toContain("FAKEFAKEFAKEFAKEFAKEFAKE");
+    expect(redacted).toContain("[REDACTED]");
+  });
+
+  it("redacts an unquoted .env-style Anthropic API key assignment", () => {
+    const source = "ANTHROPIC_API_KEY=sk-ant-api03-FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE-FAKEFAKEFAKEFAKEFAKEAA";
+    const redacted = redactSecrets(source);
+    expect(redacted).toBe("ANTHROPIC_API_KEY=[REDACTED]");
+  });
+
   it("redacts database connection strings", () => {
     const source = "DATABASE_URL=postgres://user:pass@host:5432/db";
     expect(redactSecrets(source)).toBe("DATABASE_URL=[REDACTED]");

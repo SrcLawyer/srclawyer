@@ -1,10 +1,16 @@
 import type { LlmBatchRequest, LlmProvider, LlmResponseItem } from "./types.js";
+import { DATA_CATEGORY_LABELS } from "../policy/dataCategoryLabels.js";
 
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
 // Confirm this is still current at implementation/release time.
 const DEFAULT_MODEL = "claude-sonnet-5";
 const REQUEST_TIMEOUT_MS = 30_000;
+
+// Same source of truth resolveAmbiguousFindings.ts validates responses against (KNOWN_CATEGORIES) —
+// constraining the tool schema to this enum means a legitimate resolution can no longer be discarded
+// as "unrecognized category" just because the model wasn't told what vocabulary to stay inside.
+const DATA_CATEGORY_VALUES = Object.keys(DATA_CATEGORY_LABELS);
 
 const RESOLUTION_TOOL = {
   name: "report_resolutions",
@@ -23,7 +29,11 @@ const RESOLUTION_TOOL = {
               type: ["string", "null"],
               description: 'Required when outcome is "declined": explain concretely why this could not be confidently classified. Null when resolved.',
             },
-            resolvedDataCategories: { type: "array", items: { type: "string" } },
+            resolvedDataCategories: {
+              type: "array",
+              items: { type: "string", enum: DATA_CATEGORY_VALUES },
+              description: "Only when outcome is \"resolved\". Must use these exact category values — never a category outside this list.",
+            },
             resolvedDescription: { type: "string" },
           },
           required: ["findingId", "outcome", "reason"],

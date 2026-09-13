@@ -2,6 +2,9 @@ const SECRET_PATTERNS: RegExp[] = [
   /sk_live_[A-Za-z0-9]{16,}/g,
   /sk_test_[A-Za-z0-9]{16,}/g,
   /pk_live_[A-Za-z0-9]{16,}/g,
+  // Anthropic API keys — matched by shape alone (like the patterns above), not by the surrounding
+  // variable name or quoting, so `key = "sk-ant-..."` and an unquoted `KEY=sk-ant-...` both redact.
+  /sk-ant-[A-Za-z0-9_-]{20,}/g,
   /AKIA[0-9A-Z]{16}/g,
   /AIza[0-9A-Za-z\-_]{35}/g,
   /ghp_[A-Za-z0-9]{36}/g,
