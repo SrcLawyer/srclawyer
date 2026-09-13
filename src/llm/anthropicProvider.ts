@@ -123,15 +123,26 @@ export class AnthropicProvider implements LlmProvider {
       throw new Error("Anthropic tool response missing a resolutions array");
     }
 
-    return input.resolutions.filter(isValidResponseItem);
+    return input.resolutions.map(normalizeResponseItem).filter((item): item is LlmResponseItem => item !== null);
   }
 }
 
-function isValidResponseItem(value: unknown): value is LlmResponseItem {
-  if (typeof value !== "object" || value === null) return false;
+// Anthropic's tool-use output reliably omits `reason` entirely for a "resolved" item — despite it being
+// listed in `required` — rather than sending an explicit `null` (confirmed against a real response during
+// live verification on 2026-09-13). Treating an omitted key as invalid, rather than as the `null` the field
+// means when resolved, was silently discarding otherwise-correct resolutions as "malformed."
+function normalizeResponseItem(value: unknown): LlmResponseItem | null {
+  if (typeof value !== "object" || value === null) return null;
   const item = value as Record<string, unknown>;
-  if (typeof item.findingId !== "string") return false;
-  if (item.outcome !== "resolved" && item.outcome !== "declined") return false;
-  if (item.reason !== null && typeof item.reason !== "string") return false;
-  return true;
+  if (typeof item.findingId !== "string") return null;
+  if (item.outcome !== "resolved" && item.outcome !== "declined") return null;
+  if (item.reason !== null && item.reason !== undefined && typeof item.reason !== "string") return null;
+
+  return {
+    findingId: item.findingId,
+    outcome: item.outcome,
+    reason: (item.reason as string | undefined) ?? null,
+    resolvedDataCategories: item.resolvedDataCategories as LlmResponseItem["resolvedDataCategories"],
+    resolvedDescription: item.resolvedDescription as string | undefined,
+  };
 }

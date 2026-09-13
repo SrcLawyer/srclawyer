@@ -72,4 +72,45 @@ describe("AnthropicProvider", () => {
     expect(result.outcome).toBe("resolved");
     expect(result.resolvedDataCategories).toEqual(["generic_pii"]);
   });
+
+  it("regression: a resolved item with `reason` omitted entirely (not sent as explicit null) is not discarded as malformed", async () => {
+    // The exact raw shape Anthropic returned during live verification on 2026-09-13 for this same
+    // dateOfBirth field: `reason` is absent from the object altogether, despite being listed in the tool
+    // schema's `required` array — LLM tool-use doesn't guarantee every required key is literally present,
+    // and an omitted key means the same thing here as an explicit null. The old isValidResponseItem check
+    // rejected the whole item whenever `reason` was `undefined` rather than `null`, which silently turned a
+    // correct resolution into "Response missing or malformed for this item" 3 times out of 4 real calls.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      anthropicResponse([
+        {
+          findingId: "field:app/api/account/route.ts:2:dateOfBirth",
+          outcome: "resolved",
+          resolvedDataCategories: ["generic_pii"],
+          resolvedDescription: "Date of birth collected via API request body, representing personal identifying information.",
+          // note: no `reason` key at all
+        },
+      ])
+    );
+
+    const provider = new AnthropicProvider("fake-key");
+    const [result] = await provider.resolveBatch({
+      items: [makeItem({ findingId: "field:app/api/account/route.ts:2:dateOfBirth" })],
+    });
+
+    expect(result).toBeDefined();
+    expect(result.outcome).toBe("resolved");
+    expect(result.reason).toBeNull();
+    expect(result.resolvedDataCategories).toEqual(["generic_pii"]);
+  });
+
+  it("still rejects a genuinely malformed item (missing findingId)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      anthropicResponse([{ outcome: "resolved", resolvedDataCategories: ["email"], resolvedDescription: "x" }])
+    );
+
+    const provider = new AnthropicProvider("fake-key");
+    const result = await provider.resolveBatch({ items: [makeItem({ findingId: "f1" })] });
+
+    expect(result).toEqual([]);
+  });
 });
