@@ -41,7 +41,7 @@ export interface Finding {
   processor: string | null;
   description: string;
   confidence: Confidence;
-  source: "sdk-rule" | "framework-rule" | "web-api-rule" | "html-input-rule" | "openapi" | "graphql";
+  source: "sdk-rule" | "framework-rule" | "web-api-rule" | "html-input-rule" | "openapi" | "graphql" | "zod-rule" | "type-rule";
   location: CodeLocation;
   evidence: string;
   requiresReview: boolean;

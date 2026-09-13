@@ -7,6 +7,7 @@ import { parseSource } from "./astUtils.js";
 import { runSdkRules } from "../rules/sdkRules.js";
 import { runFrameworkRules } from "../rules/frameworkRules.js";
 import { runWebApiRules } from "../rules/webApiRules.js";
+import { runZodRules } from "../rules/zodRules.js";
 import { runHtmlInputRules, extractInlineScripts } from "../rules/htmlRules.js";
 import { parseOpenApiSpec } from "../schemaParsers/openapi.js";
 import { parseGraphQLSchema } from "../schemaParsers/graphql.js";
@@ -23,6 +24,7 @@ function runCodeRules(filePath: string, source: string, root: string): Finding[]
     ...runSdkRules(ast, filePath, source, root),
     ...runFrameworkRules(ast, filePath, source, root),
     ...runWebApiRules(ast, filePath, source, root),
+    ...runZodRules(ast, filePath, source, root),
   ];
 }
 
