@@ -41,6 +41,10 @@ Every finding traces back to a file and line (`src/engine/types.ts#Finding`).
 
 `test-fixtures/` contains a small Express+Stripe app, a Next.js app (pages + app router), an OpenAPI spec, and a GraphQL schema, used to validate detection end-to-end. Run `node dist/cli.js scan` from inside `test-fixtures/` to see it work.
 
+## Accuracy corpus
+
+`npm test` never touches the network. A separate, real-world accuracy check lives in `test-fixtures/golden-corpus/` — see its own README for what it measures and why it's not part of the default test run.
+
 ## License
 
 [Business Source License 1.1](LICENSE) (BUSL-1.1) — source-available, not OSI-approved open source.

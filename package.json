@@ -17,6 +17,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
+    "test:corpus": "tsx scripts/scoreCorpus.ts",
+    "test:corpus:update-baseline": "tsx scripts/scoreCorpus.ts --update-baseline",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
