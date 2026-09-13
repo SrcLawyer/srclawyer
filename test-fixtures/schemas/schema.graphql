@@ -1,0 +1,12 @@
+type User {
+  id: ID!
+  email: String!
+  phoneNumber: String
+  billingAddress: String
+  createdAt: String!
+}
+
+input CreateUserInput {
+  email: String!
+  password: String!
+}

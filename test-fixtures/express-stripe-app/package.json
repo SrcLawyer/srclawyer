@@ -1,0 +1,9 @@
+{
+  "name": "express-stripe-app-fixture",
+  "version": "1.0.0",
+  "description": "Test fixture: Express app with Stripe checkout and a signup form",
+  "dependencies": {
+    "express": "^4.19.2",
+    "stripe": "^16.0.0"
+  }
+}

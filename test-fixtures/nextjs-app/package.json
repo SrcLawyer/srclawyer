@@ -1,0 +1,9 @@
+{
+  "name": "nextjs-app-fixture",
+  "version": "1.0.0",
+  "description": "Test fixture: Next.js API route with Mixpanel tracking",
+  "dependencies": {
+    "next": "^14.2.0",
+    "mixpanel-browser": "^2.53.0"
+  }
+}
