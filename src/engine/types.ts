@@ -51,6 +51,12 @@ export interface Finding {
    * this finding was never sent to an LLM at all.
    */
   llmResolution?: LlmResolution;
+  /**
+   * Debug/introspection only — the raw inputs computeConfidence() (src/rules/confidenceScoring.ts)
+   * used to derive confidence/requiresReview. Not a stable public contract; absent for findings that
+   * don't go through the shared scoring function (sdkRules, webApiRules, htmlRules, schema parsers).
+   */
+  confidenceFactors?: Record<string, boolean | number | string | null>;
 }
 
 export interface ProcessorProfile {
