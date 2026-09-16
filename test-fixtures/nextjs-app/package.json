@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Test fixture: Next.js API route with Mixpanel tracking",
   "dependencies": {
-    "next": "^14.2.0",
+    "next": "^15.5.24",
     "mixpanel-browser": "^2.53.0"
   }
 }
