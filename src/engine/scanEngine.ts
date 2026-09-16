@@ -4,15 +4,19 @@ import { discoverProjects } from "./discoverProjects.js";
 import { discoverFiles } from "./discoverFiles.js";
 import { detectUnsupportedStack } from "./languageDetection.js";
 import { parseSource } from "./astUtils.js";
-import { runSdkRules } from "../rules/sdkRules.js";
-import { runFrameworkRules } from "../rules/frameworkRules.js";
-import { runWebApiRules } from "../rules/webApiRules.js";
-import { runZodRules } from "../rules/zodRules.js";
-import { runTypedRequestBodyRules } from "../rules/typedRequestBodyRules.js";
-import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
-import { runHtmlInputRules, extractInlineScripts } from "../rules/htmlRules.js";
-import { parseOpenApiSpec } from "../schemaParsers/openapi.js";
-import { parseGraphQLSchema } from "../schemaParsers/graphql.js";
+import {
+  runSdkRules,
+  runFrameworkRules,
+  runWebApiRules,
+  runZodRules,
+  runTypedRequestBodyRules,
+  buildTsProject,
+  type TsProjectHandle,
+  runHtmlInputRules,
+  extractInlineScripts,
+  parseOpenApiSpec,
+  parseGraphQLSchema,
+} from "@srclawyer/rules-internal";
 import type { Finding, ScanResult } from "./types.js";
 
 const OPENAPI_NAME = /(openapi|swagger)\.(ya?ml|json)$/i;
