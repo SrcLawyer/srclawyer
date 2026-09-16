@@ -104,7 +104,6 @@ No-AI static analysis must be strong on its own, not a stripped-down teaser:
 - Real data-flow analysis (tracing a value's movement through the code), not just line-by-line pattern matching
 - Leverage existing type systems/schemas already in the codebase (TypeScript interfaces, Zod/Pydantic, GraphQL schemas, OpenAPI specs) as free, high-confidence signal
 - Maintained knowledge base mapping known third-party services to their typical data categories and disclosure obligations — curation, not AI, is the real differentiator here
-- Community-contributed rules, enabled by the open-source model
 - Honest confidence scoring: when static analysis can't confidently resolve something, say so explicitly ("N items require deeper analysis") rather than guess — doubles as the cleanest upgrade path to paid tiers
 
 ### Scan Triggers

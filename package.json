@@ -1,6 +1,6 @@
 {
   "name": "srclawyer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Static analysis engine that derives privacy policy documentation directly from source code",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
@@ -9,6 +9,15 @@
   },
   "bin": {
     "srclawyer": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
