@@ -6,6 +6,7 @@
  * detail and may change without notice — import from here, never from a deep relative/dist path.
  */
 export { redactSecrets, containsLikelySecret } from "./engine/secretRedaction.js";
+export { parseSource } from "./engine/astUtils.js";
 export type {
   DataCategory,
   Confidence,
