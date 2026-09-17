@@ -4,19 +4,15 @@ import { discoverProjects } from "./discoverProjects.js";
 import { discoverFiles } from "./discoverFiles.js";
 import { detectUnsupportedStack } from "./languageDetection.js";
 import { parseSource } from "./astUtils.js";
-import {
-  runSdkRules,
-  runFrameworkRules,
-  runWebApiRules,
-  runZodRules,
-  runTypedRequestBodyRules,
-  buildTsProject,
-  type TsProjectHandle,
-  runHtmlInputRules,
-  extractInlineScripts,
-  parseOpenApiSpec,
-  parseGraphQLSchema,
-} from "@srclawyer/rules-internal";
+import { runSdkRules } from "../rules/sdkRules.js";
+import { runFrameworkRules } from "../rules/frameworkRules.js";
+import { runWebApiRules } from "../rules/webApiRules.js";
+import { runTypedRequestBodyRules } from "../rules/typedRequestBodyRules.js";
+import { findZodCandidates, type ZodCandidate } from "../rules/zodPreFilter.js";
+import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
+import { runHtmlInputRules, extractInlineScripts } from "../rules/htmlRules.js";
+import { parseOpenApiSpec } from "../schemaParsers/openapi.js";
+import { parseGraphQLSchema } from "../schemaParsers/graphql.js";
 import type { Finding, ScanResult } from "./types.js";
 
 const OPENAPI_NAME = /(openapi|swagger)\.(ya?ml|json)$/i;
@@ -41,22 +37,38 @@ function makeLazyTsProject(files: string[]): () => TsProjectHandle | null {
   };
 }
 
-function runCodeRules(filePath: string, source: string, root: string, getTsProject: () => TsProjectHandle | null): Finding[] {
+function runCodeRules(
+  filePath: string,
+  source: string,
+  root: string,
+  getTsProject: () => TsProjectHandle | null,
+  zodCandidates: ZodCandidate[]
+): Finding[] {
   const ast = parseSource(source, filePath);
+  zodCandidates.push(...findZodCandidates(source, filePath, root));
   if (!ast) return [];
 
   return [
     ...runSdkRules(ast, filePath, source, root),
     ...runFrameworkRules(ast, filePath, source, root),
     ...runWebApiRules(ast, filePath, source, root),
-    ...runZodRules(ast, filePath, source, root),
     ...runTypedRequestBodyRules(ast, filePath, source, root, getTsProject),
   ];
 }
 
+/**
+ * Pure, local, offline — no network access anywhere in this function or anything it calls. Zod
+ * schemas and confidence scoring can no longer be fully resolved here (see pendingZodCandidates and
+ * every Finding.confidenceFactors) — resolving those against the protected-logic service is a
+ * separate, explicit step in src/cloud/resolveProtectedLogic.ts, called from commands/scan.ts, the
+ * same way Layer 2's resolveAmbiguousFindings.ts is a separate step layered on top of this function
+ * rather than folded into it. Anyone auditing "does this touch the network" can still answer that by
+ * reading this file alone.
+ */
 export async function scan(root: string): Promise<ScanResult> {
   const [projects, unsupportedStackWarning] = await Promise.all([discoverProjects(root), detectUnsupportedStack(root)]);
   const findings: Finding[] = [];
+  const pendingZodCandidates: ZodCandidate[] = [];
   let filesScanned = 0;
 
   const projectRootList = [...new Set(projects.map((p) => p.root))];
@@ -91,7 +103,7 @@ export async function scan(root: string): Promise<ScanResult> {
     }
 
     const getTsProject = tsProjectByRoot.get(rootForFile.get(filePath) ?? "") ?? noTsProject;
-    findings.push(...runCodeRules(filePath, source, root, getTsProject));
+    findings.push(...runCodeRules(filePath, source, root, getTsProject, pendingZodCandidates));
   }
 
   for (const filePath of allHtmlFiles) {
@@ -105,7 +117,7 @@ export async function scan(root: string): Promise<ScanResult> {
 
     findings.push(...runHtmlInputRules(html, filePath, root));
     for (const script of extractInlineScripts(html)) {
-      findings.push(...runCodeRules(filePath, script.code, root, noTsProject));
+      findings.push(...runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates));
     }
   }
 
@@ -128,5 +140,5 @@ export async function scan(root: string): Promise<ScanResult> {
 
   const ambiguousCount = findings.filter((f) => f.requiresReview).length;
 
-  return { projects, findings, ambiguousCount, filesScanned, unsupportedStackWarning };
+  return { projects, findings, ambiguousCount, filesScanned, unsupportedStackWarning, pendingZodCandidates };
 }

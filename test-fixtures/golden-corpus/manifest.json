@@ -1,0 +1,19 @@
+{
+  "repos": [
+    {
+      "name": "dub",
+      "url": "https://github.com/dubinc/dub.git",
+      "pinnedSha": "771a4cc614ac6947fdb1e54d81693e0399c69764",
+      "license": "AGPL-3.0-only for the core repo; a separate proprietary license governs the apps/web/app/(ee) and apps/web/app/app.dub.co/(dashboard)/[slug]/(ee) subtrees (see the repo's own LICENSE.md). Cloned in full for local scan purposes only, which AGPL permits; expected-findings entries below deliberately cite only non-(ee) paths.",
+      "notes": "Large real Next.js + Turborepo monorepo. Genuine Stripe billing integration (packages/stripe-app, apps/web/lib/partners). Good stress test for monorepo/workspace discovery and for multi-file/Zod-schema gaps that Layer 1 doesn't parse today."
+    },
+    {
+      "name": "formbricks",
+      "url": "https://github.com/formbricks/formbricks.git",
+      "pinnedSha": "cd1c6a3d79d6d3dca9ee97e44f2e62f44f8dc474",
+      "license": "AGPL-3.0-only for the core repo; a separate proprietary license governs apps/web/modules/ee, and packages/js/, packages/android/, packages/ios/, packages/api/ are MIT (see the repo's own LICENSE). Cloned in full for local scan purposes only, which AGPL permits; expected-findings entries below deliberately cite only non-(ee) paths.",
+      "notes": "Survey/forms product with a large public OpenAPI spec at the repo root (openapi.yml) containing many genuinely ambiguous field names — a good stress test for confidence scoring. Real Stripe billing exists but only under the proprietary ee/billing subtree, so it is intentionally excluded from ground truth here. Real sign-up PII collection goes through Zod-validated Next.js Server Actions rather than req.body/request.json(), which Layer 1 does not parse today — a genuine, verified recall gap captured below."
+    }
+  ],
+  "methodology": "Each repo is shallow-cloned at test time via `git fetch --depth 1 origin <pinnedSha>` into scratch space, never vendored into this repository. Ground-truth entries in expected-findings/<name>.json are matched loosely by {filePattern, lineRange, dataCategory, minConfidence} against actual scan output — never by exact description text, so internal rule refactors don't make the corpus brittle. Recall against this manifest is a hard regression gate (see scripts/scoreCorpus.ts); precision is tracked but held to a looser bar, since new true positives beyond what's hand-curated here are welcome, not a regression."
+}

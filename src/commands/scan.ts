@@ -6,6 +6,8 @@ import { formatText } from "../report/formatText.js";
 import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
 import { resolveProviderForTier } from "../llm/resolveProviderForTier.js";
 import { resolveAmbiguousFindings } from "../llm/resolveAmbiguousFindings.js";
+import { resolveProtectedLogic } from "../cloud/resolveProtectedLogic.js";
+import { resolveProtectedLogicEndpoint } from "../cloud/config.js";
 import type { Finding } from "../engine/types.js";
 
 export interface ScanOptions {
@@ -22,6 +24,21 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
 
   const result = await scan(root);
   let findings: Finding[] = result.findings;
+
+  // Not tier-gated, not behind --no-llm: confidence scoring and Zod-schema detection are Layer 1
+  // capabilities now, needed on every real scan regardless of which LLM tier (if any) is configured.
+  // A failure here degrades honestly (findings keep their safe local fallback) rather than blocking
+  // the scan — see resolveProtectedLogic's own per-call error handling.
+  const hasScorableFindings = findings.some((f) => f.confidenceFactors) || result.pendingZodCandidates.length > 0;
+  let protectedLogicWarning: string | null = null;
+  if (hasScorableFindings) {
+    const endpoint = resolveProtectedLogicEndpoint();
+    const resolved = await resolveProtectedLogic(findings, result.pendingZodCandidates, endpoint);
+    findings = resolved.findings;
+    protectedLogicWarning = resolved.warning;
+    if (protectedLogicWarning) console.error(protectedLogicWarning);
+  }
+
   let llmError: string | null = null;
 
   if (options.llm && config) {
@@ -42,19 +59,21 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
     }
   }
 
-  const finalResult = { ...result, findings };
+  const ambiguousCount = findings.filter((f) => f.requiresReview).length;
+  const finalResult = { ...result, findings, ambiguousCount };
   const policyPath = resolve(root, options.out);
   writeFileSync(policyPath, generatePolicyMarkdown(finalResult, config, llmError));
 
-  if (result.unsupportedStackWarning || llmError) {
+  if (result.unsupportedStackWarning || llmError || protectedLogicWarning) {
     process.exitCode = 1;
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ ...finalResult, policyPath, llmError }, null, 2));
+    console.log(JSON.stringify({ ...finalResult, policyPath, llmError, protectedLogicWarning }, null, 2));
     return;
   }
 
   console.log(formatText(finalResult));
+  if (protectedLogicWarning) console.log(`\n${protectedLogicWarning}`);
   console.log(`\nPrivacy policy written to ${join(options.out)}`);
 }

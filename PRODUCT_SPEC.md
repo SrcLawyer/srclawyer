@@ -106,6 +106,8 @@ No-AI static analysis must be strong on its own, not a stripped-down teaser:
 - Maintained knowledge base mapping known third-party services to their typical data categories and disclosure obligations — curation, not AI, is the real differentiator here
 - Honest confidence scoring: when static analysis can't confidently resolve something, say so explicitly ("N items require deeper analysis") rather than guess — doubles as the cleanest upgrade path to paid tiers
 
+**What actually stays local, precisely stated:** all code reading and pattern detection happens entirely on your machine, offline — no code ever leaves it for this part. Once detection is complete, the tool makes one batched network call per scan to grade how confident each finding is; that call sends only field names and derived yes/no signals (e.g. "was this name ambiguous," "how many similar fields are nearby"), never your source code. A small number of scans — those using Zod schemas as request validators — make one additional call, sending a small, redacted code fragment (never full files, never secrets, using the same redaction as everything else here). This is unrelated to, and unaffected by, the separate optional Layer 2 (AI-assisted) tier described below — it runs regardless of which LLM tier, if any, is configured, and it is not itself AI/LLM-based.
+
 ### Scan Triggers
 
 **Free / solo tier: manual only.** `srclawyer scan` runs on demand and nothing else — no CI hook, no scheduled backstop, no file-watching. This is the current implemented behavior: the CLI exposes exactly two commands (`init`, `scan`), both invoked by hand, with no cron/schedule/webhook code anywhere in the engine.

@@ -1,0 +1,51 @@
+[
+  {
+    "filePattern": "packages/stripe-app/src/utils/stripe.ts",
+    "lineRange": [1, 10],
+    "dataCategory": "payment_info",
+    "minConfidence": "high",
+    "note": "Real `import Stripe from \"stripe\"`. Baseline (2026-09-13, sha 771a4cc6): DETECTED via sdk-rule."
+  },
+  {
+    "filePattern": "apps/web/lib/partners/get-partner-bank-account.ts",
+    "lineRange": [1, 5],
+    "dataCategory": "payment_info",
+    "minConfidence": "high",
+    "note": "Real `import Stripe from \"stripe\"` in a bank-account-lookup helper. Baseline: DETECTED via sdk-rule."
+  },
+  {
+    "filePattern": "apps/web/lib/partners/get-partner-bank-account.ts",
+    "lineRange": [5, 19],
+    "dataCategory": "name",
+    "minConfidence": "low",
+    "note": "INTENTIONAL, DOCUMENTED GAP (not a bug): `bankAccountSchema` collects `account_holder_name`, `bank_name`, `routing_number`, `last4`, sourced from a third-party API response rather than a direct incoming request — out of scope for the current Zod-schema detection by design (see test-fixtures/golden-corpus/README.md's 'Scope boundary' section). Kept in ground truth so the gap stays visible in recall rather than silently disappearing."
+  },
+  {
+    "filePattern": "apps/web/lib/partners/get-partner-bank-account.ts",
+    "lineRange": [5, 19],
+    "dataCategory": "payment_info",
+    "minConfidence": "low",
+    "note": "Same schema, same intentional scope gap as above — `bank_name`/`routing_number`/`last4` are payment-account fields, not just a name field."
+  },
+  {
+    "filePattern": "apps/web/app/api/workspaces/*/import/rebrandly/route.ts",
+    "lineRange": [78, 87],
+    "dataCategory": "authentication_credentials",
+    "minConfidence": "medium",
+    "note": "`const { apiKey } = await req.json();` in the Rebrandly import route. Baseline: DETECTED via framework-rule, confidently classified (requiresReview: false)."
+  },
+  {
+    "filePattern": "apps/web/app/api/workspaces/*/import/short/route.ts",
+    "lineRange": [65, 73],
+    "dataCategory": "authentication_credentials",
+    "minConfidence": "medium",
+    "note": "Same apiKey-collection pattern as the Rebrandly importer, for the Short.io importer. Baseline: DETECTED via framework-rule."
+  },
+  {
+    "filePattern": "apps/web/ui/support/chat-interface.tsx",
+    "lineRange": [200, 225],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "note": "localStorage write under a non-literal (computed) key in the support chat widget. Baseline: DETECTED via web-api-rule, correctly left as requiresReview: true — an honest miss, not a resolution."
+  }
+]

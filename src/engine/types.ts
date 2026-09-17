@@ -52,9 +52,12 @@ export interface Finding {
    */
   llmResolution?: LlmResolution;
   /**
-   * Debug/introspection only — the raw inputs computeConfidence() (src/rules/confidenceScoring.ts)
-   * used to derive confidence/requiresReview. Not a stable public contract; absent for findings that
-   * don't go through the shared scoring function (sdkRules, webApiRules, htmlRules, schema parsers).
+   * Present ONLY for findings whose confidence/requiresReview are provisional, pending the
+   * protected-logic scoring call (src/cloud/protectedLogicClient.ts) — the fields captured here are
+   * exactly what that endpoint needs (field names and derived yes/no signals, never source code).
+   * Until scored, `confidence`/`requiresReview` hold the safe fallback ("low"/true). Absent entirely
+   * for findings whose confidence is fixed locally (sdkRules, webApiRules, htmlRules, schema parsers)
+   * and never sent anywhere.
    */
   confidenceFactors?: Record<string, boolean | number | string | null>;
 }
@@ -77,4 +80,12 @@ export interface ScanResult {
   ambiguousCount: number;
   filesScanned: number;
   unsupportedStackWarning: string | null;
+  /**
+   * Files that look like they might define a Zod schema used to validate incoming request data —
+   * unconfirmed, since the actual schema/anchor detection is protected logic and runs server-side.
+   * Resolved (or, on failure, honestly left unresolved) by resolveProtectedLogic() in
+   * commands/scan.ts, exactly like requiresReview findings are resolved by Layer 2's
+   * resolveAmbiguousFindings() — not inside scan() itself, which stays pure/offline.
+   */
+  pendingZodCandidates: Array<{ id: string; codeFragment: string; fragmentLineToSourceLine: number[] }>;
 }

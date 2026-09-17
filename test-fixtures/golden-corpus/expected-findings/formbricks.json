@@ -1,0 +1,37 @@
+[
+  {
+    "filePattern": "openapi.yml",
+    "lineRange": [330, 450],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "note": "Public API OpenAPI spec at the repo root defines many genuinely generic-named fields (surveyId, contactId, data, meta, variables, etc.) with no further signal available from the name alone. Baseline (2026-09-13, sha cd1c6a3d): DETECTED via the openapi schema parser, correctly left as requiresReview: true."
+  },
+  {
+    "filePattern": "packages/js-core/src/lib/common/config.ts",
+    "lineRange": [58, 61],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "note": "`localStorage.setItem(JS_LOCAL_STORAGE_KEY, ...)` in the client-side JS SDK — the key is a module-level constant identifier, not a string literal, so webApiRules.ts's existing dynamic-key branch fires (it can't statically resolve any non-literal expression, constant or not). Baseline: DETECTED via web-api-rule, correctly left as requiresReview: true."
+  },
+  {
+    "filePattern": "apps/web/modules/auth/signup/actions.ts",
+    "lineRange": [71, 86],
+    "dataCategory": "name",
+    "minConfidence": "medium",
+    "note": "`ZCreateUserAction` (a Zod object) collects `name`, `email`, `password`, passed to a Next.js Server Action wrapper (`actionClient.inputSchema(ZCreateUserAction)`). Baseline: DETECTED via zod-rule."
+  },
+  {
+    "filePattern": "apps/web/modules/auth/signup/actions.ts",
+    "lineRange": [71, 86],
+    "dataCategory": "email",
+    "minConfidence": "medium",
+    "note": "Same schema (ZCreateUserAction) — the `email` field. DETECTED via zod-rule."
+  },
+  {
+    "filePattern": "apps/web/modules/auth/signup/actions.ts",
+    "lineRange": [71, 86],
+    "dataCategory": "authentication_credentials",
+    "minConfidence": "medium",
+    "note": "Same schema (ZCreateUserAction) — the `password` field. DETECTED via zod-rule."
+  }
+]
