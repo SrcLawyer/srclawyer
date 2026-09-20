@@ -2,7 +2,7 @@
 
 Static analysis engine that derives privacy policy documentation directly from source code, and keeps it in sync as the code changes.
 
-> This is a Phase 1 scaffold: the CLI (`init`, `scan`), the Layer 1 static analysis engine — SDK/framework pattern detection, HTML/browser-API detection, and OpenAPI/GraphQL schema parsing — and markdown privacy policy generation. LLM-assisted reasoning and CI integration are not yet implemented.
+> This is a Phase 1 scaffold: the CLI (`init`, `scan`), the Layer 1 static analysis engine — SDK/framework pattern detection, HTML/browser-API detection, and OpenAPI/GraphQL schema parsing — LLM-assisted reasoning for ambiguous findings (Layer 2, bring-your-own-key or managed), and markdown privacy policy generation. CI/CD integration is not yet implemented.
 >
 > Scanning is manual-only (`srclawyer scan`, run on demand) — this is the free/solo tier's permanent behavior, not a placeholder. CI/CD integration (PR-triggered scans, a weekly backstop scan) is scoped for the paid/team tier only; see `PRODUCT_SPEC.md` Section 8.5.
 
@@ -33,9 +33,13 @@ During development, run directly from source with `npm run dev -- scan`.
 
 Every finding traces back to a file and line (`src/engine/types.ts#Finding`).
 
+## Network calls
+
+Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, `scan` makes one batched network call to grade the confidence of what it found (field names and derived yes/no signals only, never source code), and, for scans that use Zod schemas as request validators, one additional call sending a small redacted code fragment. This runs on every scan regardless of tier and is unrelated to the separate, optional LLM-assisted (Layer 2) reasoning described above. See `PRODUCT_SPEC.md`'s "Static Analysis Depth" section for the precise wording.
+
 ## Secret handling
 
-`src/engine/secretRedaction.ts` strips known secret-shaped values (API keys, connection strings, JWTs, private key blocks) out of any evidence string before it's stored or printed — enforced at the base layer, independent of the LLM-assisted path that doesn't exist yet.
+`src/engine/secretRedaction.ts` strips known secret-shaped values (API keys, connection strings, JWTs, private key blocks) out of any evidence string before it's stored or printed, and out of any code fragment before it's sent as part of the confidence-grading call above — enforced at the base layer, independent of whether the optional LLM-assisted (Layer 2) path is configured.
 
 ## Test fixtures
 

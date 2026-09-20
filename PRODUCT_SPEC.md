@@ -67,8 +67,8 @@ A static-analysis engine (with LLM-assisted reasoning for ambiguous cases) that 
 ## 7. Business Model
 
 - **Open-core.** Free/open: analysis engine, CLI, basic generation. Paid: hosted/managed CI service, curated & continuously-updated legal content (the real ongoing cost center), sandboxed dynamic verification, multi-client/agency dashboards, attribution removal.
-- Rationale: trust matters more here than typical SaaS since the tool reads private source code to produce a binding legal document — open engine = auditable, no black-box trust required.
-- Precedent model: Sentry, GitLab, Supabase, HashiCorp Vault.
+- Rationale: trust matters more here than typical SaaS since the tool reads private source code to produce a binding legal document — the engine that reads your code stays source-available and auditable, and code-reading/pattern-detection never leaves your machine (see "What actually stays local" under Static Analysis Depth below). One caveat to this trust claim, stated plainly rather than glossed over: grading how confident a finding is (not detecting it in the first place) is handled by a small closed-source service, since that's the part with real, tunable business logic worth protecting from a well-capitalized competitor lifting it wholesale — the same competitive concern the BSL license exists to address for the rest of the codebase. That service only ever receives field names and derived yes/no signals, never source code.
+- Precedent model: Sentry, GitLab, Supabase, HashiCorp Vault — though the analogy isn't perfect: those companies keep their entire engine open and gate only hosted/managed convenience, whereas here a thin slice of the detection engine's own decision logic is what's held back.
 - Optional attribution watermark (tier-gated, separate from the mandatory disclaimer).
 
 ## 8. Competitive Positioning
@@ -95,7 +95,7 @@ A static-analysis engine (with LLM-assisted reasoning for ambiguous cases) that 
 
 ### Secret/Credential Handling (non-negotiable, hard rule)
 - Recognize known secret-shaped patterns (API keys, tokens, connection strings) and redact them **before** any analysis, logging, or transmission occurs
-- Enforced in the open-source Layer 1 code itself so it's independently auditable
+- Enforced in the Layer 1 code itself — source-available under the BSL license (see Licensing above), not open-source in the OSI sense — so it's independently auditable
 - The tool detects *that* a service like Stripe is integrated; it must never need or transmit the actual secret values encountered while scanning config/`.env` files
 
 ### Static Analysis Depth (Layer 1 — the free tier, and the actual product)
