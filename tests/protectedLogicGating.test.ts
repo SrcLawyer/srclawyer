@@ -73,9 +73,10 @@ describe("runScan protected-logic gating", () => {
 
     await runScan(dir, { json: true, out: "PRIVACY_POLICY.md", llm: false });
 
-    expect(calls.indexOf("https://rules.srclawyer.workers.dev/v1/detect-zod-schema")).toBeLessThan(
-      calls.indexOf("https://rules.srclawyer.workers.dev/v1/score-fields")
-    );
+    const zodCallIndex = calls.findIndex((u) => u.endsWith("/v1/detect-zod-schema"));
+    const scoreCallIndex = calls.findIndex((u) => u.endsWith("/v1/score-fields"));
+    expect(zodCallIndex).toBeGreaterThanOrEqual(0);
+    expect(zodCallIndex).toBeLessThan(scoreCallIndex);
 
     const policy = readFileSync(join(dir, "PRIVACY_POLICY.md"), "utf8");
     expect(policy).toContain("Email addresses");

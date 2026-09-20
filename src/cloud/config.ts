@@ -4,12 +4,13 @@
  * tier/llm fields. `SRCLAWYER_PROTECTED_LOGIC_URL` is meant for local development against a
  * `wrangler dev` instance; real deployments should never need to override it.
  *
- * DEFAULT_BASE_URL and DEFAULT_API_KEY are PLACEHOLDERS — they need to be replaced with the real
- * deployed Worker URL and a real issued key before this ships. Until then, every real network call
- * this module enables will fail (honestly — see resolveProtectedLogic's per-call error handling),
- * not silently succeed against a fake endpoint.
+ * DEFAULT_BASE_URL is the real deployed Worker (srclawyer-rules, tag v0.2.1). DEFAULT_API_KEY is
+ * still a PLACEHOLDER — it needs to be replaced with the real key set via `wrangler secret put
+ * API_KEY` before this ships. Until then, every real network call this module enables will fail
+ * (honestly — see resolveProtectedLogic's per-call error handling), not silently succeed against a
+ * mismatched key.
  */
-const DEFAULT_BASE_URL = "https://rules.srclawyer.workers.dev";
+const DEFAULT_BASE_URL = "https://srclawyer-rules.anishjha352.workers.dev";
 const DEFAULT_API_KEY = "srclawyer-free-tier-placeholder-key";
 
 export interface ProtectedLogicEndpoint {
