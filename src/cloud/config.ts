@@ -5,13 +5,16 @@
  * `wrangler dev` instance; real deployments should never need to override it.
  *
  * DEFAULT_BASE_URL is the real deployed Worker (srclawyer-rules, tag v0.2.1). DEFAULT_API_KEY is
- * still a PLACEHOLDER — it needs to be replaced with the real key set via `wrangler secret put
- * API_KEY` before this ships. Until then, every real network call this module enables will fail
- * (honestly — see resolveProtectedLogic's per-call error handling), not silently succeed against a
- * mismatched key.
+ * the real shared free-tier key, matching the Worker's own API_KEY secret (set via `wrangler secret
+ * put API_KEY` on the Worker directly, never as a repo/CI secret). This is a deliberate choice, not
+ * an oversight: it's a low-privilege, purpose-built credential that only grants rate-limited access
+ * to the two protected-logic endpoints — categorically different from a GitHub PAT or a Cloudflare
+ * API token, which must never appear in a public repo. Baking it in here is what gives free-tier
+ * users zero-setup access with no account/key management of their own. Verified end-to-end against
+ * the live Worker (not just wrangler dev) before this was committed.
  */
 const DEFAULT_BASE_URL = "https://srclawyer-rules.anishjha352.workers.dev";
-const DEFAULT_API_KEY = "srclawyer-free-tier-placeholder-key";
+const DEFAULT_API_KEY = "dae3d13ec14ab78eeb5bae1398e0bee8fba55f218861860c81aa279c03c64888";
 
 export interface ProtectedLogicEndpoint {
   baseUrl: string;
