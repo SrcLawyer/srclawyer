@@ -8,16 +8,58 @@ Static analysis engine that derives privacy policy documentation directly from s
 
 ## Usage
 
+No install needed for a first try — `npx` fetches and runs the latest version on demand:
+
 ```bash
-npm install
-npm run build
-node dist/cli.js init            # one-time: jurisdiction, markets, industry
-node dist/cli.js scan            # analyze the codebase and write PRIVACY_POLICY.md
-node dist/cli.js scan --json     # findings as JSON (still writes the policy file)
-node dist/cli.js scan --out docs/privacy.md
+npx srclawyer init     # one-time: jurisdiction, markets, industry
+npx srclawyer scan     # analyze the codebase and write PRIVACY_POLICY.md
 ```
 
-During development, run directly from source with `npm run dev -- scan`.
+For a persistent `srclawyer` command instead of typing `npx` every time:
+
+```bash
+npm install -g srclawyer
+srclawyer init
+srclawyer scan                  # analyze the codebase and write PRIVACY_POLICY.md
+srclawyer scan --json           # findings as JSON (still writes the policy file)
+srclawyer scan --out docs/privacy.md
+```
+
+If `srclawyer` isn't found right after a global install, see [Troubleshooting: command not found](#troubleshooting-command-not-found) below.
+
+## Development
+
+Working on SrcLawyer itself (not just using it):
+
+```bash
+git clone https://github.com/SrcLawyer/srclawyer.git
+cd srclawyer
+npm install
+npm run build
+node dist/cli.js scan
+```
+
+Or run directly from source without building first: `npm run dev -- scan`.
+
+## Troubleshooting: command not found
+
+After `npm install -g srclawyer`, the install prints `added N packages` but the `srclawyer` command isn't recognized. This almost always means the command *was* installed — npm's own global bin directory just isn't on your shell's `PATH`, or your shell doesn't know about it yet.
+
+**The most common cause: conda.** If you have Anaconda/Miniconda installed with `auto_activate_base` enabled (the default), conda prepends its own directories to `PATH` every time a new shell starts — this can land ahead of, or instead of, the directory npm actually installed into. Symptoms: `srclawyer` works in some terminals/tabs but not others, or never works despite the install reporting success.
+
+Steps, in order of how likely each is to fix it:
+
+1. **Open a brand-new terminal window or tab.** `PATH` is set when a shell starts; a terminal that was already open won't pick up a global install that happened after it launched.
+2. **If a new terminal doesn't help, check where npm actually put it versus what's on your `PATH`:**
+   ```bash
+   npm config get prefix      # where npm installs global packages
+   echo $PATH                 # does the above, plus "/bin", appear in here?
+   ```
+   If `npm config get prefix`'s `bin` subdirectory (or, on Windows, the prefix itself) isn't listed in `$PATH` at all, that's the root cause — your shell's startup files (`.zshrc`, `.bashrc`, `.bash_profile`) need a line adding it, e.g. `export PATH="$(npm config get prefix)/bin:$PATH"`.
+3. **If conda specifically is the culprit** (its paths appear in `$PATH` ahead of npm's prefix, or npm's prefix is missing because conda's own Node/npm shadowed the one you expected to use): either run `conda deactivate` before using `srclawyer`, or turn off automatic activation so it stops happening on every new shell: `conda config --set auto_activate_base false`.
+4. **If `srclawyer` still isn't found after fixing `PATH`**, your shell may have cached the old (missing) command location. Clear that cache: `hash -r` (bash) or `rehash` (zsh), then try again without opening a new terminal.
+
+If none of this resolves it, `npx srclawyer scan` (see [Usage](#usage) above) sidesteps `PATH` entirely, since `npx` always invokes the binary directly rather than relying on it being a recognized shell command.
 
 ## What `scan` does today
 
