@@ -31,7 +31,7 @@ A static-analysis engine (with LLM-assisted reasoning for ambiguous cases) that 
 - One-time setup step on first run (not a recurring questionnaire) — modeled on `npm init`
 - Collects: legal entity location/jurisdiction, target markets/audience, industry vertical, children's-data flag
 - **Pre-fill guesses where possible** (Stripe account country, README business info, domain TLD) — developer confirms/corrects rather than starting blank
-- Writes answers to a config file (e.g. `.privacypolicy.yml`) — all subsequent automated scans read silently, no repeated interruption
+- Writes answers to a config file (e.g. `.srclawyer.config.yml`) — all subsequent automated scans read silently, no repeated interruption
 - Follow-up questions triggered only by a detected material change (new processor, new region signal) — never a full re-ask
 
 ### 4.3 Output

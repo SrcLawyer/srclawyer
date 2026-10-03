@@ -1,4 +1,4 @@
-import type { SrcLawyerConfig } from "../config/config.js";
+import { CONFIG_FILENAME, type SrcLawyerConfig } from "../config/config.js";
 import type { ProviderResolution } from "./types.js";
 import { AnthropicProvider } from "./anthropicProvider.js";
 
@@ -14,7 +14,7 @@ export function resolveProviderForTier(config: SrcLawyerConfig): ProviderResolut
     if (!envVar) {
       return {
         provider: null,
-        error: 'Tier is "byok" but no API key environment variable is configured in .privacypolicy.yml. Run "srclawyer init" to set one.',
+        error: `Tier is "byok" but no API key environment variable is configured in ${CONFIG_FILENAME}. Run "srclawyer init" to set one.`,
       };
     }
     const apiKey = process.env[envVar];
@@ -34,5 +34,5 @@ export function resolveProviderForTier(config: SrcLawyerConfig): ProviderResolut
     };
   }
 
-  return { provider: null, error: `Unknown tier "${tier}" in .privacypolicy.yml.` };
+  return { provider: null, error: `Unknown tier "${tier}" in ${CONFIG_FILENAME}.` };
 }

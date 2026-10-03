@@ -1,5 +1,5 @@
 import type { DataCategory, Finding, ScanResult } from "../engine/types.js";
-import type { SrcLawyerConfig } from "../config/config.js";
+import { CONFIG_FILENAME, type SrcLawyerConfig } from "../config/config.js";
 import { DATA_CATEGORY_LABELS } from "./dataCategoryLabels.js";
 import { MANDATORY_DISCLAIMER } from "./disclaimer.js";
 
@@ -103,7 +103,7 @@ function renderContextSection(config: SrcLawyerConfig | null): string {
     return [
       "## Scope",
       "",
-      "No `.privacypolicy.yml` configuration was found, so this policy was generated without jurisdiction, target-market, or industry context. Run `srclawyer init` and re-run `srclawyer scan` to include that context.",
+      `No \`${CONFIG_FILENAME}\` configuration was found, so this policy was generated without jurisdiction, target-market, or industry context. Run \`srclawyer init\` and re-run \`srclawyer scan\` to include that context.`,
     ].join("\n");
   }
 

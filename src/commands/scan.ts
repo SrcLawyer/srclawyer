@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { loadConfig } from "../config/config.js";
+import { CONFIG_FILENAME, loadConfig } from "../config/config.js";
 import { scan } from "../engine/scanEngine.js";
 import { formatText } from "../report/formatText.js";
 import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
@@ -19,7 +19,7 @@ export interface ScanOptions {
 export async function runScan(root: string, options: ScanOptions): Promise<void> {
   const config = loadConfig(root);
   if (!config) {
-    console.error('No .privacypolicy.yml found. Run "srclawyer init" first.\n');
+    console.error(`No ${CONFIG_FILENAME} found. Run "srclawyer init" first.\n`);
   }
 
   const result = await scan(root);

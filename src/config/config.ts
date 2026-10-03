@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import yaml from "js-yaml";
 
-export const CONFIG_FILENAME = ".privacypolicy.yml";
+export const CONFIG_FILENAME = ".srclawyer.config.yml";
 
 export type SrcLawyerTier = "free" | "byok" | "managed";
 
