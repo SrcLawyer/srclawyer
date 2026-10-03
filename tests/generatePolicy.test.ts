@@ -103,6 +103,14 @@ describe("generatePolicyMarkdown", () => {
     expect(markdown).toContain("Python detected as the primary language");
   });
 
+  it("says the codebase wasn't analyzed, not that no data collection was found, when the stack is unsupported and nothing was confidently detected", () => {
+    const result = makeScanResult({ unsupportedStackWarning: "UNSUPPORTED CODEBASE — Python detected as the primary language." });
+    const markdown = generatePolicyMarkdown(result, null);
+
+    expect(markdown).toContain("Not analyzed");
+    expect(markdown).not.toContain("No data-collection patterns were confidently identified");
+  });
+
   it("renders an AI-resolved finding in the main body using its LLM-refined category and description", () => {
     const finding = makeFinding({
       dataCategories: ["generic_pii"],

@@ -158,6 +158,8 @@ export function generatePolicyMarkdown(result: ScanResult, config: SrcLawyerConf
   const categorySections = renderCategorySections(confidentFindings);
   if (categorySections.length > 0) {
     parts.push(categorySections.join("\n\n"));
+  } else if (result.unsupportedStackWarning) {
+    parts.push("**Not analyzed:** this codebase's primary language/framework isn't supported yet (see the warning above). This is not a clean-scan result — nothing below should be read as \"no data collection found.\"");
   } else {
     parts.push("No data-collection patterns were confidently identified in this codebase.");
   }
