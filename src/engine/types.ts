@@ -88,4 +88,8 @@ export interface ScanResult {
    * resolveAmbiguousFindings() — not inside scan() itself, which stays pure/offline.
    */
   pendingZodCandidates: Array<{ id: string; codeFragment: string; fragmentLineToSourceLine: number[] }>;
+  /** Relative paths of files whose extracted Zod fragment was too large to send safely and was
+   *  dropped before ever reaching pendingZodCandidates -- surfaced in resolveProtectedLogic()'s
+   *  warning so a schema going unchecked is never silent, just like a failed network call is. */
+  oversizedZodFiles: string[];
 }

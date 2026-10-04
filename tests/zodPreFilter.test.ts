@@ -4,17 +4,17 @@ import { findZodCandidates } from "../src/rules/zodPreFilter.js";
 describe("findZodCandidates", () => {
   it("finds nothing when there's no zod import at all", () => {
     const source = `actionClient.inputSchema(schema).parse(req.body);\n`;
-    expect(findZodCandidates(source, "/root/a.ts", "/root")).toHaveLength(0);
+    expect(findZodCandidates(source, "/root/a.ts", "/root").candidates).toHaveLength(0);
   });
 
   it("finds nothing when zod is imported but no anchor-shaped call is present", () => {
     const source = `import { z } from "zod";\nconst schema = z.object({ email: z.string() });\n`;
-    expect(findZodCandidates(source, "/root/a.ts", "/root")).toHaveLength(0);
+    expect(findZodCandidates(source, "/root/a.ts", "/root").candidates).toHaveLength(0);
   });
 
   it("produces exactly one candidate, deliberately without confirming an actual match, when both signals are present", () => {
     const source = `import { z } from "zod";\nconst schema = z.object({ email: z.string() });\nactionClient.inputSchema(schema);\n`;
-    const candidates = findZodCandidates(source, "/root/actions.ts", "/root");
+    const { candidates } = findZodCandidates(source, "/root/actions.ts", "/root");
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].id).toBe("actions.ts");
@@ -32,7 +32,7 @@ describe("findZodCandidates", () => {
       `schema.parse(req.body);`,
       "",
     ].join("\n");
-    const candidates = findZodCandidates(source, "/root/a.ts", "/root");
+    const { candidates } = findZodCandidates(source, "/root/a.ts", "/root");
 
     expect(candidates[0].codeFragment).toContain("z.object");
     expect(candidates[0].codeFragment).not.toContain("sk_test_FAKEFAKEFAKEFAKEFAKEFAKE");
@@ -44,7 +44,7 @@ describe("findZodCandidates", () => {
     // excerpt (just the import + the one-line anchor statement), not a contiguous slice from line 1.
     const filler = Array.from({ length: 200 }, (_, i) => `// filler ${i}`);
     const source = [`import { z } from "zod";`, ...filler, `schema.parse(req.body);`].join("\n");
-    const candidates = findZodCandidates(source, "/root/a.ts", "/root");
+    const { candidates } = findZodCandidates(source, "/root/a.ts", "/root");
 
     const anchorLineInSource = 202; // 1-based: line 1 is the import, then 200 filler lines, then the anchor
     const fragmentIndexOfAnchor = candidates[0].fragmentLineToSourceLine.indexOf(anchorLineInSource);
@@ -63,7 +63,7 @@ describe("findZodCandidates", () => {
       ...filler,
       `export const createUserAction = actionClient.inputSchema(ZCreateUserAction).action(async () => {});`,
     ].join("\n");
-    const candidates = findZodCandidates(source, "/root/actions.ts", "/root");
+    const { candidates } = findZodCandidates(source, "/root/actions.ts", "/root");
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].codeFragment).toContain("ZCreateUserAction = z.object");
@@ -78,7 +78,7 @@ describe("findZodCandidates", () => {
       ...filler,
       `bodySchema.parse(req.body);`,
     ].join("\n");
-    const candidates = findZodCandidates(source, "/root/a.ts", "/root");
+    const { candidates } = findZodCandidates(source, "/root/a.ts", "/root");
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].codeFragment).toContain("bodySchema = z.object");
@@ -97,7 +97,7 @@ describe("findZodCandidates", () => {
       ...bodyLines,
       `});`,
     ].join("\n");
-    const candidates = findZodCandidates(source, "/root/actions.ts", "/root");
+    const { candidates } = findZodCandidates(source, "/root/actions.ts", "/root");
 
     expect(candidates).toHaveLength(1);
     const fragment = candidates[0].codeFragment;
@@ -106,5 +106,34 @@ describe("findZodCandidates", () => {
     expect(fragment).toContain("doSomething(0)");
     expect(fragment).toContain("doSomething(119)");
     expect(fragment.trim().endsWith("});")).toBe(true);
+  });
+
+  describe("oversized fragments", () => {
+    it("drops a fragment exceeding MAX_FRAGMENT_BYTES and reports the file as oversized instead of sending it", () => {
+      // A synthetic, deliberately huge enclosing function -- the exact shape (a real golden-corpus
+      // file's enclosing function or import list growing unreasonably large) that risked tipping a
+      // detect-zod-schema batch over the Worker's CPU time limit (confirmed via wrangler tail).
+      const bodyLines = Array.from({ length: 2000 }, (_, i) => `  doSomethingWithAVeryLongStatementName(${i});`);
+      const source = [
+        `import { z } from "zod";`,
+        `const bodySchema = z.object({ email: z.string() });`,
+        `export const createUserAction = actionClient.inputSchema(bodySchema).action(async () => {`,
+        ...bodyLines,
+        `});`,
+      ].join("\n");
+
+      const { candidates, oversizedFiles } = findZodCandidates(source, "/root/huge-actions.ts", "/root");
+
+      expect(candidates).toHaveLength(0);
+      expect(oversizedFiles).toEqual(["huge-actions.ts"]);
+    });
+
+    it("still sends a normal-sized fragment from a different file in the same scan, unaffected by another file's oversized one", () => {
+      const source = `import { z } from "zod";\nconst schema = z.object({ email: z.string() });\nschema.parse(req.body);\n`;
+      const { candidates, oversizedFiles } = findZodCandidates(source, "/root/normal.ts", "/root");
+
+      expect(candidates).toHaveLength(1);
+      expect(oversizedFiles).toHaveLength(0);
+    });
   });
 });

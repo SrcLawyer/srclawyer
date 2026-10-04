@@ -104,7 +104,12 @@ async function main(): Promise<void> {
     const expected: ExpectedFinding[] = JSON.parse(readFileSync(join(EXPECTED_DIR, `${repo.name}.json`), "utf8"));
     const scanResult = await scan(repoDir);
 
-    const { findings: scoredFindings, warning } = await resolveProtectedLogic(scanResult.findings, scanResult.pendingZodCandidates, endpoint);
+    const { findings: scoredFindings, warning } = await resolveProtectedLogic(
+      scanResult.findings,
+      scanResult.pendingZodCandidates,
+      endpoint,
+      scanResult.oversizedZodFiles
+    );
     if (warning) console.error(`  protected-logic warning: ${warning}`);
 
     const score = scoreCorpus(repo.name, scoredFindings, expected);

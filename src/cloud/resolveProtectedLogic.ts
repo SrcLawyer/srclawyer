@@ -1,6 +1,7 @@
 import type { Finding } from "../engine/types.js";
 import type { ZodCandidate } from "../rules/zodPreFilter.js";
 import { classifyFieldName, isAmbiguousFieldName } from "../rules/dataCategoryLexicon.js";
+import { isSafeFieldName } from "../rules/safeFieldNames.js";
 import { countConfidentSiblings } from "../rules/confidenceFactors.js";
 import { detectZodSchemas, scoreFields, type ProtectedLogicClientOptions, type ScoreFieldsItem } from "./protectedLogicClient.js";
 
@@ -18,10 +19,17 @@ export interface ResolveProtectedLogicResult {
 export async function resolveProtectedLogic(
   findings: Finding[],
   pendingZodCandidates: ZodCandidate[],
-  options: ProtectedLogicClientOptions
+  options: ProtectedLogicClientOptions,
+  oversizedZodFiles: string[] = []
 ): Promise<ResolveProtectedLogicResult> {
   let workingFindings = findings;
   const warnings: string[] = [];
+
+  if (oversizedZodFiles.length > 0) {
+    warnings.push(
+      `Zod-schema detection skipped for ${oversizedZodFiles.length} file(s) because the extracted fragment was too large to send safely: ${oversizedZodFiles.join(", ")}.`
+    );
+  }
 
   if (pendingZodCandidates.length > 0) {
     const byId = new Map(pendingZodCandidates.map((c) => [c.id, c]));
@@ -38,6 +46,7 @@ export async function resolveProtectedLogic(
 
       const allNames = result.fields.map((f) => f.name);
       for (const field of result.fields) {
+        if (isSafeFieldName(field.name)) continue;
         const sourceLine = candidate.fragmentLineToSourceLine[field.line - 1] ?? field.line;
         const lexiconCategory = classifyFieldName(field.name);
         const ambiguousName = isAmbiguousFieldName(field.name);
