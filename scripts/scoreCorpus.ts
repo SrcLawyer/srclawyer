@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   const manifest: Manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"));
   const updateBaseline = process.argv.includes("--update-baseline");
   const withLlm = process.argv.includes("--with-llm");
-  const priorBaseline: Record<string, { recall: number }> = existsSync(BASELINE_PATH)
+  const priorBaseline: Record<string, { recallRealPii: number }> = existsSync(BASELINE_PATH)
     ? JSON.parse(readFileSync(BASELINE_PATH, "utf8"))
     : {};
 
@@ -111,11 +111,19 @@ async function main(): Promise<void> {
     results[repo.name] = score;
 
     console.error(`  filesScanned: ${scanResult.filesScanned}, totalFindings: ${score.totalFindings}`);
-    console.error(`  [Layer 1 only]     recall: ${score.matchedExpected}/${score.totalExpected} = ${(score.recall * 100).toFixed(0)}%   precision (informational): ${score.findingsMatchingSomeExpected}/${score.totalFindings} = ${(score.precision * 100).toFixed(0)}%`);
+    console.error(
+      `  [Layer 1 only] recall of real PII: ${score.matchedRealPii}/${score.totalExpectedRealPii} = ${(score.recallRealPii * 100).toFixed(0)}%   ` +
+        `(documented non-PII still flagged: ${score.matchedDocumentedNonPii}/${score.totalExpectedDocumentedNonPii})`
+    );
+    console.error(
+      `  findings breakdown: real PII ${score.findingsRealPii}, documented non-PII ${score.findingsDocumentedNonPii}, ` +
+        `unmatched ${score.findingsUnmatched} (of ${score.totalFindings} total) — "unmatched" means not yet covered by ` +
+        `ground truth either way, not "wrong"`
+    );
 
-    if (score.unmatchedExpected.length > 0) {
-      console.error("  missed expected findings (Layer 1 only):");
-      for (const u of score.unmatchedExpected) {
+    if (score.unmatchedRealPii.length > 0) {
+      console.error("  missed real-PII expected findings (Layer 1 only):");
+      for (const u of score.unmatchedRealPii) {
         console.error(`    - ${u.filePattern}:${u.lineRange[0]}-${u.lineRange[1]} [${u.dataCategory}] — ${u.note ?? ""}`);
       }
     }
@@ -125,31 +133,31 @@ async function main(): Promise<void> {
       if (combinedFindings) {
         const combinedScore = scoreCorpus(repo.name, combinedFindings, expected);
         console.error(
-          `  [Layer 1 + 2]       recall: ${combinedScore.matchedExpected}/${combinedScore.totalExpected} = ${(combinedScore.recall * 100).toFixed(0)}%   precision (informational): ${combinedScore.findingsMatchingSomeExpected}/${combinedScore.totalFindings} = ${(combinedScore.precision * 100).toFixed(0)}%`
+          `  [Layer 1 + 2]  recall of real PII: ${combinedScore.matchedRealPii}/${combinedScore.totalExpectedRealPii} = ${(combinedScore.recallRealPii * 100).toFixed(0)}%`
         );
-        if (combinedScore.matchedExpected !== score.matchedExpected) {
+        if (combinedScore.matchedRealPii !== score.matchedRealPii) {
           console.error(
-            `  Layer 2 changed recall for this repo: ${score.matchedExpected} -> ${combinedScore.matchedExpected} of ${score.totalExpected} expected entries matched.`
+            `  Layer 2 changed real-PII recall for this repo: ${score.matchedRealPii} -> ${combinedScore.matchedRealPii} of ${score.totalExpectedRealPii} expected entries matched.`
           );
         }
       }
     }
 
     const prior = priorBaseline[repo.name];
-    if (prior && score.recall < prior.recall) {
-      console.error(`  REGRESSION: recall dropped from ${(prior.recall * 100).toFixed(0)}% to ${(score.recall * 100).toFixed(0)}%`);
+    if (prior && score.recallRealPii < prior.recallRealPii) {
+      console.error(`  REGRESSION: real-PII recall dropped from ${(prior.recallRealPii * 100).toFixed(0)}% to ${(score.recallRealPii * 100).toFixed(0)}%`);
       regression = true;
     }
   }
 
   if (updateBaseline) {
-    const baseline = Object.fromEntries(Object.entries(results).map(([name, r]) => [name, { recall: r.recall }]));
+    const baseline = Object.fromEntries(Object.entries(results).map(([name, r]) => [name, { recallRealPii: r.recallRealPii }]));
     writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2) + "\n");
     console.error(`\nBaseline written to ${BASELINE_PATH}`);
   }
 
   if (regression) {
-    console.error("\nFAILED: recall regressed against the stored baseline.");
+    console.error("\nFAILED: real-PII recall regressed against the stored baseline.");
     process.exitCode = 1;
     return;
   }
