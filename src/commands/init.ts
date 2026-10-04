@@ -1,7 +1,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { CONFIG_FILENAME, DEFAULT_CONFIG, configPath, writeConfig, type SrcLawyerConfig, type SrcLawyerTier } from "../config/config.js";
+import {
+  CONFIG_FILENAME,
+  DEFAULT_CONFIG,
+  configPath,
+  hasUnmigratedLegacyConfig,
+  legacyConfigMessage,
+  writeConfig,
+  type SrcLawyerConfig,
+  type SrcLawyerTier,
+} from "../config/config.js";
 
 function guessIndustry(root: string): string | null {
   const pkgPath = join(root, "package.json");
@@ -29,6 +38,11 @@ export async function runInit(root: string): Promise<void> {
   const existingPath = configPath(root);
   if (existsSync(existingPath)) {
     console.log(`${CONFIG_FILENAME} already exists. Delete it first if you want to redo setup.`);
+    return;
+  }
+
+  if (hasUnmigratedLegacyConfig(root)) {
+    console.log(legacyConfigMessage());
     return;
   }
 

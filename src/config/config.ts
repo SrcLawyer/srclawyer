@@ -4,6 +4,9 @@ import yaml from "js-yaml";
 
 export const CONFIG_FILENAME = ".srclawyer.config.yml";
 
+/** The pre-0.5.0 name. Never auto-migrated or silently read as a fallback -- see legacyConfigMessage. */
+export const LEGACY_CONFIG_FILENAME = ".privacypolicy.yml";
+
 export type SrcLawyerTier = "free" | "byok" | "managed";
 
 export interface SrcLawyerLlmConfig {
@@ -30,6 +33,25 @@ export const DEFAULT_CONFIG: SrcLawyerConfig = {
 
 export function configPath(root: string): string {
   return join(root, CONFIG_FILENAME);
+}
+
+export function legacyConfigPath(root: string): string {
+  return join(root, LEGACY_CONFIG_FILENAME);
+}
+
+/** True only when the old file is present and the new one isn't -- never fires once migrated. */
+export function hasUnmigratedLegacyConfig(root: string): boolean {
+  return existsSync(legacyConfigPath(root)) && !existsSync(configPath(root));
+}
+
+/**
+ * Single source of truth for this message so init and scan can't drift into saying it two different
+ * ways. Deliberately never auto-reads the legacy file as a fallback, even though the YAML shape is
+ * identical -- the rename needs to be an explicit, visible action, not a silent compatibility shim
+ * that lets the old filename linger indefinitely.
+ */
+export function legacyConfigMessage(): string {
+  return `Found a legacy ${LEGACY_CONFIG_FILENAME} from an older version of SrcLawyer. Rename it to keep your existing settings:\n\n  mv ${LEGACY_CONFIG_FILENAME} ${CONFIG_FILENAME}\n\nThen re-run this command. (If you'd rather start fresh instead, delete ${LEGACY_CONFIG_FILENAME} first.)`;
 }
 
 export function loadConfig(root: string): SrcLawyerConfig | null {

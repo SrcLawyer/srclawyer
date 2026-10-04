@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig, writeConfig, DEFAULT_CONFIG } from "../src/config/config.js";
+import {
+  loadConfig,
+  writeConfig,
+  DEFAULT_CONFIG,
+  CONFIG_FILENAME,
+  LEGACY_CONFIG_FILENAME,
+  hasUnmigratedLegacyConfig,
+  legacyConfigMessage,
+} from "../src/config/config.js";
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "srclawyer-config-"));
@@ -38,5 +46,37 @@ describe("config tier/llm fields", () => {
     const loaded = loadConfig(dir);
     expect(loaded?.tier).toBe("free");
     expect(loaded?.llm).toBeUndefined();
+  });
+});
+
+describe("legacy config rename safeguard", () => {
+  it("is false when neither file exists", () => {
+    expect(hasUnmigratedLegacyConfig(tempDir())).toBe(false);
+  });
+
+  it("is false when only the current filename exists", () => {
+    const dir = tempDir();
+    writeConfig(dir, DEFAULT_CONFIG);
+    expect(hasUnmigratedLegacyConfig(dir)).toBe(false);
+  });
+
+  it("is true when only the legacy filename exists", () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, LEGACY_CONFIG_FILENAME), "entityLocation: US\n");
+    expect(hasUnmigratedLegacyConfig(dir)).toBe(true);
+  });
+
+  it("is false once both exist -- migration already happened, never re-warn", () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, LEGACY_CONFIG_FILENAME), "entityLocation: US\n");
+    writeConfig(dir, DEFAULT_CONFIG);
+    expect(hasUnmigratedLegacyConfig(dir)).toBe(false);
+  });
+
+  it("the shared message names both filenames and the rename command, not just 'run init'", () => {
+    const message = legacyConfigMessage();
+    expect(message).toContain(LEGACY_CONFIG_FILENAME);
+    expect(message).toContain(CONFIG_FILENAME);
+    expect(message).toContain(`mv ${LEGACY_CONFIG_FILENAME} ${CONFIG_FILENAME}`);
   });
 });

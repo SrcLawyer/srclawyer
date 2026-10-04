@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { CONFIG_FILENAME, loadConfig } from "../config/config.js";
+import { CONFIG_FILENAME, hasUnmigratedLegacyConfig, legacyConfigMessage, loadConfig } from "../config/config.js";
 import { scan } from "../engine/scanEngine.js";
 import { formatText } from "../report/formatText.js";
 import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
@@ -18,8 +18,14 @@ export interface ScanOptions {
 
 export async function runScan(root: string, options: ScanOptions): Promise<void> {
   const config = loadConfig(root);
+  let legacyConfigWarning: string | null = null;
   if (!config) {
-    console.error(`No ${CONFIG_FILENAME} found. Run "srclawyer init" first.\n`);
+    if (hasUnmigratedLegacyConfig(root)) {
+      legacyConfigWarning = legacyConfigMessage();
+      console.error(legacyConfigWarning);
+    } else {
+      console.error(`No ${CONFIG_FILENAME} found. Run "srclawyer init" first.\n`);
+    }
   }
 
   const result = await scan(root);
@@ -64,12 +70,12 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   const policyPath = resolve(root, options.out);
   writeFileSync(policyPath, generatePolicyMarkdown(finalResult, config, llmError));
 
-  if (result.unsupportedStackWarning || llmError || protectedLogicWarning) {
+  if (result.unsupportedStackWarning || llmError || protectedLogicWarning || legacyConfigWarning) {
     process.exitCode = 1;
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ ...finalResult, policyPath, llmError, protectedLogicWarning }, null, 2));
+    console.log(JSON.stringify({ ...finalResult, policyPath, llmError, protectedLogicWarning, legacyConfigWarning }, null, 2));
     return;
   }
 
