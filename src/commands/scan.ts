@@ -81,5 +81,6 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
 
   console.log(formatText(finalResult));
   if (protectedLogicWarning) console.log(`\n${protectedLogicWarning}`);
+  if (legacyConfigWarning) console.log(`\n${legacyConfigWarning}`);
   console.log(`\nPrivacy policy written to ${join(options.out)}`);
 }

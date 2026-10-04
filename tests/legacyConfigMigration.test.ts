@@ -48,6 +48,25 @@ describe("runScan legacy-config safeguard", () => {
     expect(output.legacyConfigWarning).toBeNull();
   });
 
+  it("repeats the legacy-config warning at the end of text output (once on stderr up front, once on stdout at the end), mirroring the protected-logic warning's own repeat, so it can't scroll off on a long scan", async () => {
+    writeFileSync(join(dir, LEGACY_CONFIG_FILENAME), "entityLocation: US\n");
+    writeFileSync(join(dir, "server.js"), 'const { notes } = req.body;\n');
+
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await runScan(dir, { json: false, out: "PRIVACY_POLICY.md", llm: false });
+      const marker = `mv ${LEGACY_CONFIG_FILENAME} ${CONFIG_FILENAME}`;
+      const logHits = logSpy.mock.calls.filter(([arg]) => typeof arg === "string" && arg.includes(marker)).length;
+      const errorHits = errorSpy.mock.calls.filter(([arg]) => typeof arg === "string" && arg.includes(marker)).length;
+      expect(errorHits).toBe(1);
+      expect(logHits).toBe(1);
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
   it("reports no legacy warning once migrated (current filename present)", async () => {
     writeFileSync(
       join(dir, CONFIG_FILENAME),
