@@ -6,6 +6,6 @@
     "recall": 1
   },
   "microblog": {
-    "recall": 0.5
+    "recall": 0.875
   }
 }

@@ -73,4 +73,81 @@ describe("runPythonFrameworkRules", () => {
 
     expect(findings[0].evidence).not.toContain("sk_test_FAKEFAKEFAKEFAKEFAKEFAKE");
   });
+
+  describe("same-function alias tracking", () => {
+    it("detects data['x'] after data = request.get_json()", async () => {
+      const source = ["def create_user():", "    data = request.get_json()", "    email = data['email']"].join("\n") + "\n";
+      const tree = (await parsePythonSource(source))!;
+      const findings = runPythonFrameworkRules(tree, "/root/app.py", source, "/root");
+
+      expect(findings).toHaveLength(1);
+      expect(findings[0].dataCategories).toContain("email");
+    });
+
+    it("detects data.get('x') after data = request.get_json(), the .get(...) alias form", async () => {
+      const source = ["def create_user():", "    data = request.get_json()", "    name = data.get('username')"].join("\n") + "\n";
+      const tree = (await parsePythonSource(source))!;
+      const findings = runPythonFrameworkRules(tree, "/root/app.py", source, "/root");
+
+      expect(findings).toHaveLength(1);
+      expect(findings[0].dataCategories).toContain("name");
+    });
+
+    it("tracks aliases of request.form / request.args / request.json the same way, not just get_json()", async () => {
+      const source = [
+        "def h():",
+        "    form = request.form",
+        "    a = form['email']",
+        "    args = request.args",
+        "    b = args.get('ref')",
+        "    j = request.json",
+        "    c = j['phone']",
+      ].join("\n") + "\n";
+      const tree = (await parsePythonSource(source))!;
+      const findings = runPythonFrameworkRules(tree, "/root/app.py", source, "/root");
+
+      expect(findings.map((f) => f.id)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining(":email"),
+          expect.stringContaining(":ref"),
+          expect.stringContaining(":phone"),
+        ])
+      );
+    });
+
+    it("detects a direct subscript on request.get_json() with no intermediate variable", async () => {
+      const source = "email = request.get_json()['email']\n";
+      const tree = (await parsePythonSource(source))!;
+      const findings = runPythonFrameworkRules(tree, "/root/app.py", source, "/root");
+
+      expect(findings).toHaveLength(1);
+      expect(findings[0].dataCategories).toContain("email");
+    });
+
+    it("does not leak an alias across functions: a same-named variable in another function that never aliased request data is not flagged", async () => {
+      const source = [
+        "def handler_a():",
+        "    data = request.get_json()",
+        "    email = data['email']",
+        "",
+        "def handler_b():",
+        "    data = {}",
+        "    notes = data['notes']",
+      ].join("\n") + "\n";
+      const tree = (await parsePythonSource(source))!;
+      const findings = runPythonFrameworkRules(tree, "/root/app.py", source, "/root");
+
+      expect(findings).toHaveLength(1);
+      expect(findings[0].dataCategories).toContain("email");
+      expect(findings.some((f) => f.id.endsWith(":notes"))).toBe(false);
+    });
+
+    it("does not flag a plain dict alias that was never assigned from a request accessor", async () => {
+      const source = ["def h():", "    data = load_config()", "    debug = data['debug']"].join("\n") + "\n";
+      const tree = (await parsePythonSource(source))!;
+      const findings = runPythonFrameworkRules(tree, "/root/app.py", source, "/root");
+
+      expect(findings).toHaveLength(0);
+    });
+  });
 });
