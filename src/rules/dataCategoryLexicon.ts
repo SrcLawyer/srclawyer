@@ -2,10 +2,16 @@ import type { DataCategory } from "../engine/types.js";
 
 const LEXICON: Array<{ pattern: RegExp; category: DataCategory }> = [
   { pattern: /email/i, category: "email" },
-  // Checked before the generic "name" pattern below: bank_name/account_holder_name end in
-  // "name" and would otherwise be classified as just "name", losing the payment-specific signal.
   { pattern: /bank[ _-]?name|routing[ _-]?number|account[ _-]?holder|iban|swift[ _-]?code/i, category: "payment_info" },
-  { pattern: /(full)?name$|firstname|lastname|surname/i, category: "name" },
+  // Anchored to the whole field name, not a bare "...name$" suffix match: the old pattern matched
+  // ANY field ending in "name" -- hostname, filename, directoryName, className, teamName, etc. -- none
+  // of which are a person's name. This matches only "name" itself and the known person-name
+  // decompositions (first/last/middle/maiden/nick/display/legal name, username), each allowing an
+  // optional separator (first_name, firstName, first-name). A compound this doesn't recognize falls
+  // through with no category match, landing in the same "could not confidently classify — needs
+  // review" path as any other unclassified field -- not the safe list, not a new discard path, just
+  // the existing honest-ambiguity treatment.
+  { pattern: /^(full|first|middle|last|sur|maiden|nick|display|legal)[\s_-]*name$|^name$|^user[\s_-]*name$/i, category: "name" },
   { pattern: /phone|mobile|telephone/i, category: "phone" },
   { pattern: /address|street|city|zip ?code|postal ?code/i, category: "physical_address" },
   { pattern: /card ?number|creditcard|cvv|cvc|cardholder/i, category: "payment_info" },
