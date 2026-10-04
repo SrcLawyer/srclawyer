@@ -63,17 +63,32 @@ If none of this resolves it, `npx srclawyer scan` (see [Usage](#usage) above) si
 
 ## What `scan` does today
 
-- **Known SDK integrations** (import/require detection): Stripe, SendGrid, Twilio, Google Analytics, Mixpanel, Auth0, Firebase, Cognito — each mapped to the data categories it typically processes (`src/rules/processorProfiles.ts`).
-- **Request-body field collection** in Express (`req.body.x`, destructured `req.body`) and Next.js (both `pages/api` and the app router's `await request.json()`), classified against a field-name lexicon (`src/rules/dataCategoryLexicon.ts`).
+- **Known SDK integrations** (import/require detection): Stripe, SendGrid, Twilio, Google Analytics, Mixpanel, Auth0, Firebase, Cognito for JS/TS; Stripe, SendGrid, Twilio, Mixpanel, Auth0, Firebase for Python — each mapped to the data categories it typically processes (`src/rules/processorProfiles.ts`).
+- **Request-body field collection** in Express (`req.body.x`, destructured `req.body`) and Next.js (both `pages/api` and the app router's `await request.json()`), and in **Flask** (`request.form`/`.json`/`.args`, both subscript and `.get(...)` forms), classified against a field-name lexicon (`src/rules/dataCategoryLexicon.ts`). In both languages, a value assigned to a local variable earlier in the *same function* (`const body = req.body` / `data = request.get_json()`) is tracked one mechanical hop, so a later `body.email` / `data['email']` is still caught — not just the direct, unaliased form.
 - **OpenAPI/Swagger schemas** (`components.schemas.*.properties`) and **GraphQL SDL** type/input fields.
 - **HTML forms and inline scripts** (`src/rules/htmlRules.ts`): native `<input>` elements classified by `type` (password/email/tel are unambiguous native signals) or by `id`/`name` against the lexicon; inline `<script>` blocks are extracted and run through the same SDK/framework/web-API rules as any other file.
 - **Browser platform APIs** (`src/rules/webApiRules.ts`): `getUserMedia` (split into microphone and camera access), geolocation, and `localStorage`/`sessionStorage` writes classified by key name.
 - Fields that can't be confidently classified (generic names like `data`, `payload`) are surfaced with `requiresReview: true` rather than silently guessed.
-- **A field-name allowlist** (`src/rules/safeFieldNames.ts`) suppresses findings entirely for exact-match structural fields (`id`, `createdAt`, `status`, pagination params, etc.) so "needs review" stays a signal, not noise from routine boilerplate. Anything not on the allowlist keeps the existing classify-or-flag behavior above.
-- **Unsupported language/framework detection** (`src/engine/languageDetection.ts`) runs at the start of every scan: it checks for Django (`manage.py`), Rails (`Gemfile` + `app/controllers`), gRPC (`.proto` files), and falls back to a file-count ratio for Python/Ruby/Go/Java/PHP/C# vs JS/TS/HTML. When it fires, a bordered warning appears at the top of the CLI output *and* at the top of the generated `PRIVACY_POLICY.md` (not just a log line easy to miss), the warning is included in `--json` output, and the process exits with code 1 so CI can't silently treat a scan of an unsupported codebase as a pass.
+- **A field-name allowlist** (`src/rules/safeFieldNames.ts`) suppresses findings entirely for exact-match structural and pagination/sort fields (`id`, `createdAt`, `status`, `per_page`, `cursor`, `sort_by`, etc.) so "needs review" stays a signal, not noise from routine boilerplate. Anything not on the allowlist keeps the existing classify-or-flag behavior above.
+- **Unsupported language/framework detection** (`src/engine/languageDetection.ts`) runs at the start of every scan: it checks for Django (`manage.py`), FastAPI (`from fastapi import` / `import fastapi`), Rails (`Gemfile` + `app/controllers`), gRPC (`.proto` files), and falls back to a file-count ratio for Ruby/Go/Java/PHP/C# vs JS/TS/HTML/Python. When it fires, a bordered warning appears at the top of the CLI output *and* at the top of the generated `PRIVACY_POLICY.md` (not just a log line easy to miss), the warning is included in `--json` output, and the process exits with code 1 so CI can't silently treat a scan of an unsupported codebase as a pass.
 - **Generates a markdown privacy policy** (`src/policy/generatePolicy.ts`) in the same command: findings are grouped by data category, each clause cites the file:line that justified it, third-party processors get their own section, and anything flagged `requiresReview` is excluded from the body and listed separately under "Items Requiring Manual Review" instead of being guessed. The mandatory disclaimer (`src/policy/disclaimer.ts`) is always appended, unconditionally.
 
 Every finding traces back to a file and line (`src/engine/types.ts#Finding`).
+
+### Supported languages and frameworks
+
+| Language | Frameworks | Status |
+|---|---|---|
+| JavaScript / TypeScript | Express, Next.js (pages + app router) | Supported |
+| Python | Flask | Supported (beta — see "Known gaps" below) |
+| Python | FastAPI, Django | Explicitly detected and flagged as unsupported, never silently skipped |
+| Ruby, Go, Java, PHP, C#, gRPC | — | Explicitly detected and flagged as unsupported |
+
+### Known gaps
+
+- **Cross-function aliasing isn't tracked, in either language.** The same-function alias tracking described above follows exactly one assignment hop within the function it occurs in. If that value is passed on — as a function parameter, through a closure, via a module-level variable — a field read from it afterward is not detected. Example: a Flask handler reads `data = request.get_json()` and calls `User.from_dict(data)`; a field read as `data['password']` *inside* `from_dict` is not caught, only reads inside the original handler function are.
+- **Data sent to a third party via a raw HTTP call isn't attributed to that processor.** SDK-integration detection (above) is anchored to known package imports. A call like Python's `requests.post("https://api.some-provider.com/...", json={...})` or JS's `fetch("https://api.some-provider.com/...")` — bypassing a dedicated SDK entirely — is invisible to this detection today, in both languages, regardless of how sensitive the data it sends is.
+- **Python support is based on one real-world corpus repository so far** (a Flask app; see `test-fixtures/golden-corpus/`), not the broader validation JS detection has had. Expect rougher edges on Flask codebases with unusual patterns.
 
 ## Network calls
 
