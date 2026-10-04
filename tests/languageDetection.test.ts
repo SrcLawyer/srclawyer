@@ -45,15 +45,15 @@ describe("detectUnsupportedStack", () => {
     expect(warning).toContain("gRPC");
   });
 
-  it("flags a codebase where Python files dominate over JS/TS", async () => {
-    const dir = tempDir("srclawyer-lang-py-dominant-");
+  it("flags a codebase where Go files dominate over JS/TS", async () => {
+    const dir = tempDir("srclawyer-lang-go-dominant-");
     for (let i = 0; i < 5; i++) {
-      writeFileSync(join(dir, `module_${i}.py`), "x = 1\n");
+      writeFileSync(join(dir, `module_${i}.go`), "package main\n");
     }
     writeFileSync(join(dir, "tiny.js"), "// build helper\n");
 
     const warning = await detectUnsupportedStack(dir);
-    expect(warning).toContain("Python");
+    expect(warning).toContain("Go");
   });
 
   it("does not flag a JS-majority codebase that has a couple of Python scripts", async () => {
@@ -62,6 +62,32 @@ describe("detectUnsupportedStack", () => {
       writeFileSync(join(dir, `module_${i}.js`), "// js\n");
     }
     writeFileSync(join(dir, "deploy.py"), "# helper script\n");
+
+    expect(await detectUnsupportedStack(dir)).toBeNull();
+  });
+
+  it("does not flag a Python-majority Flask codebase -- Python is a supported language now", async () => {
+    const dir = tempDir("srclawyer-lang-py-majority-");
+    for (let i = 0; i < 5; i++) {
+      writeFileSync(join(dir, `module_${i}.py`), "x = 1\n");
+    }
+    writeFileSync(join(dir, "tiny.js"), "// build helper\n");
+
+    expect(await detectUnsupportedStack(dir)).toBeNull();
+  });
+
+  it("flags a FastAPI project honestly -- Python is supported, but this framework isn't yet", async () => {
+    const dir = tempDir("srclawyer-lang-fastapi-");
+    writeFileSync(join(dir, "main.py"), "from fastapi import FastAPI\napp = FastAPI()\n");
+
+    const warning = await detectUnsupportedStack(dir);
+    expect(warning).toContain("FastAPI");
+    expect(warning).toContain("incomplete");
+  });
+
+  it("does not flag a genuine Flask project -- the one Python framework actually understood", async () => {
+    const dir = tempDir("srclawyer-lang-flask-");
+    writeFileSync(join(dir, "app.py"), "from flask import Flask, request\napp = Flask(__name__)\n");
 
     expect(await detectUnsupportedStack(dir)).toBeNull();
   });

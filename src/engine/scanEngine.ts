@@ -4,10 +4,13 @@ import { discoverProjects } from "./discoverProjects.js";
 import { discoverFiles } from "./discoverFiles.js";
 import { detectUnsupportedStack } from "./languageDetection.js";
 import { parseSource } from "./astUtils.js";
+import { parsePythonSource } from "./pythonAstUtils.js";
 import { runSdkRules } from "../rules/sdkRules.js";
 import { runFrameworkRules } from "../rules/frameworkRules.js";
 import { runWebApiRules } from "../rules/webApiRules.js";
 import { runTypedRequestBodyRules } from "../rules/typedRequestBodyRules.js";
+import { runPythonSdkRules } from "../rules/pythonSdkRules.js";
+import { runPythonFrameworkRules } from "../rules/pythonFrameworkRules.js";
 import { findZodCandidates, type ZodCandidate } from "../rules/zodPreFilter.js";
 import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
 import { runHtmlInputRules, extractInlineScripts } from "../rules/htmlRules.js";
@@ -56,6 +59,13 @@ function runCodeRules(
   ];
 }
 
+async function runPythonCodeRules(filePath: string, source: string, root: string): Promise<Finding[]> {
+  const tree = await parsePythonSource(source);
+  if (!tree) return [];
+
+  return [...runPythonSdkRules(tree, filePath, source, root), ...runPythonFrameworkRules(tree, filePath, source, root)];
+}
+
 /**
  * Pure, local, offline — no network access anywhere in this function or anything it calls. Zod
  * schemas and confidence scoring can no longer be fully resolved here (see pendingZodCandidates and
@@ -75,6 +85,7 @@ export async function scan(root: string): Promise<ScanResult> {
   const fileSets = await Promise.all(projectRootList.map((projectRoot) => discoverFiles(projectRoot)));
 
   const allCodeFiles = new Set<string>();
+  const allPythonFiles = new Set<string>();
   const allHtmlFiles = new Set<string>();
   const allSchemaFiles = new Set<string>();
   const rootForFile = new Map<string, string>();
@@ -86,6 +97,7 @@ export async function scan(root: string): Promise<ScanResult> {
       allCodeFiles.add(f);
       rootForFile.set(f, projectRoot);
     });
+    set.pythonFiles.forEach((f) => allPythonFiles.add(f));
     set.htmlFiles.forEach((f) => allHtmlFiles.add(f));
     set.schemaFiles.forEach((f) => allSchemaFiles.add(f));
   });
@@ -104,6 +116,18 @@ export async function scan(root: string): Promise<ScanResult> {
 
     const getTsProject = tsProjectByRoot.get(rootForFile.get(filePath) ?? "") ?? noTsProject;
     findings.push(...runCodeRules(filePath, source, root, getTsProject, pendingZodCandidates));
+  }
+
+  for (const filePath of allPythonFiles) {
+    filesScanned += 1;
+    let source: string;
+    try {
+      source = readFileSync(filePath, "utf8");
+    } catch {
+      continue;
+    }
+
+    findings.push(...(await runPythonCodeRules(filePath, source, root)));
   }
 
   for (const filePath of allHtmlFiles) {
