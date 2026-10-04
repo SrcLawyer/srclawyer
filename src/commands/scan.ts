@@ -35,11 +35,12 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   // capabilities now, needed on every real scan regardless of which LLM tier (if any) is configured.
   // A failure here degrades honestly (findings keep their safe local fallback) rather than blocking
   // the scan — see resolveProtectedLogic's own per-call error handling.
-  const hasScorableFindings = findings.some((f) => f.confidenceFactors) || result.pendingZodCandidates.length > 0;
+  const hasScorableFindings =
+    findings.some((f) => f.confidenceFactors) || result.pendingZodCandidates.length > 0 || result.oversizedZodFiles.length > 0;
   let protectedLogicWarning: string | null = null;
   if (hasScorableFindings) {
     const endpoint = resolveProtectedLogicEndpoint();
-    const resolved = await resolveProtectedLogic(findings, result.pendingZodCandidates, endpoint);
+    const resolved = await resolveProtectedLogic(findings, result.pendingZodCandidates, endpoint, result.oversizedZodFiles);
     findings = resolved.findings;
     protectedLogicWarning = resolved.warning;
     if (protectedLogicWarning) console.error(protectedLogicWarning);

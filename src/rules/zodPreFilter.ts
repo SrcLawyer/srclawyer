@@ -22,6 +22,15 @@ import { parseSource } from "../engine/astUtils.js";
 const ZOD_IMPORT_RE = /from\s+["']zod(?:\/v[34](?:-mini)?)?["']/;
 const ANCHOR_CALL_RE = /\.(?:parse|safeParse|parseAsync|safeParseAsync|inputSchema)\s*\(/;
 
+/**
+ * An individual fragment this large is unlikely on real request-validation schemas and risky to send
+ * at all: the protected-logic Worker has a hard CPU time limit, confirmed (via wrangler tail) to be
+ * exceeded intermittently by large detect-zod-schema batches. A single over-cap fragment is dropped
+ * entirely rather than sent and risking it alone blowing the whole batch's CPU budget -- the caller
+ * surfaces which file was skipped (see oversizedFiles below) so the gap is never silent.
+ */
+export const MAX_FRAGMENT_BYTES = 8_000;
+
 // Resolving "which identifier does this anchor call reference, and where is IT declared at the top
 // level" is plain lexical lookup, not the protected scope-boundary judgment — safe to do locally so a
 // schema declared far from its anchor (very common: define near the top, use in an export lower down)
@@ -55,18 +64,26 @@ function findDeclarationStatement(body: Statement[], name: string): Statement | 
   );
 }
 
-export function findZodCandidates(source: string, filePath: string, root: string): ZodCandidate[] {
-  if (!ZOD_IMPORT_RE.test(source)) return [];
+export interface FindZodCandidatesResult {
+  candidates: ZodCandidate[];
+  /** Relative paths of files whose extracted fragment exceeded MAX_FRAGMENT_BYTES and was dropped
+   *  rather than sent -- the caller must surface these, never drop them silently. */
+  oversizedFiles: string[];
+}
+
+export function findZodCandidates(source: string, filePath: string, root: string): FindZodCandidatesResult {
+  const none: FindZodCandidatesResult = { candidates: [], oversizedFiles: [] };
+  if (!ZOD_IMPORT_RE.test(source)) return none;
 
   const lines = source.split("\n");
   const matchLineIndexes: number[] = [];
   lines.forEach((line, i) => {
     if (ANCHOR_CALL_RE.test(line)) matchLineIndexes.push(i);
   });
-  if (matchLineIndexes.length === 0) return [];
+  if (matchLineIndexes.length === 0) return none;
 
   const ast = parseSource(source, filePath);
-  if (!ast) return [];
+  if (!ast) return none;
 
   const body = ast.program.body;
   const includedLines = new Set<number>();
@@ -96,12 +113,17 @@ export function findZodCandidates(source: string, filePath: string, root: string
     if (declStmt) includeRange(lineRange(declStmt));
   }
 
-  if (includedLines.size === 0) return [];
+  if (includedLines.size === 0) return none;
 
   const sortedIndexes = [...includedLines].sort((a, b) => a - b);
   const fragment = sortedIndexes.map((i) => lines[i]).join("\n");
   const fragmentLineToSourceLine = sortedIndexes.map((i) => i + 1);
-
   const relPath = relative(root, filePath);
-  return [{ id: relPath, codeFragment: redactSecrets(fragment), fragmentLineToSourceLine }];
+
+  const redacted = redactSecrets(fragment);
+  if (Buffer.byteLength(redacted, "utf8") > MAX_FRAGMENT_BYTES) {
+    return { candidates: [], oversizedFiles: [relPath] };
+  }
+
+  return { candidates: [{ id: relPath, codeFragment: redacted, fragmentLineToSourceLine }], oversizedFiles: [] };
 }

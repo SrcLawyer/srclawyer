@@ -45,10 +45,13 @@ function runCodeRules(
   source: string,
   root: string,
   getTsProject: () => TsProjectHandle | null,
-  zodCandidates: ZodCandidate[]
+  zodCandidates: ZodCandidate[],
+  oversizedZodFiles: string[]
 ): Finding[] {
   const ast = parseSource(source, filePath);
-  zodCandidates.push(...findZodCandidates(source, filePath, root));
+  const zodResult = findZodCandidates(source, filePath, root);
+  zodCandidates.push(...zodResult.candidates);
+  oversizedZodFiles.push(...zodResult.oversizedFiles);
   if (!ast) return [];
 
   return [
@@ -79,6 +82,7 @@ export async function scan(root: string): Promise<ScanResult> {
   const [projects, unsupportedStackWarning] = await Promise.all([discoverProjects(root), detectUnsupportedStack(root)]);
   const findings: Finding[] = [];
   const pendingZodCandidates: ZodCandidate[] = [];
+  const oversizedZodFiles: string[] = [];
   let filesScanned = 0;
 
   const projectRootList = [...new Set(projects.map((p) => p.root))];
@@ -115,7 +119,7 @@ export async function scan(root: string): Promise<ScanResult> {
     }
 
     const getTsProject = tsProjectByRoot.get(rootForFile.get(filePath) ?? "") ?? noTsProject;
-    findings.push(...runCodeRules(filePath, source, root, getTsProject, pendingZodCandidates));
+    findings.push(...runCodeRules(filePath, source, root, getTsProject, pendingZodCandidates, oversizedZodFiles));
   }
 
   for (const filePath of allPythonFiles) {
@@ -141,7 +145,7 @@ export async function scan(root: string): Promise<ScanResult> {
 
     findings.push(...runHtmlInputRules(html, filePath, root));
     for (const script of extractInlineScripts(html)) {
-      findings.push(...runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates));
+      findings.push(...runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates, oversizedZodFiles));
     }
   }
 
@@ -164,5 +168,5 @@ export async function scan(root: string): Promise<ScanResult> {
 
   const ambiguousCount = findings.filter((f) => f.requiresReview).length;
 
-  return { projects, findings, ambiguousCount, filesScanned, unsupportedStackWarning, pendingZodCandidates };
+  return { projects, findings, ambiguousCount, filesScanned, unsupportedStackWarning, pendingZodCandidates, oversizedZodFiles };
 }
