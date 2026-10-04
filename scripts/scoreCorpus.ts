@@ -97,6 +97,13 @@ async function main(): Promise<void> {
 
   const results: Record<string, ReturnType<typeof scoreCorpus>> = {};
   let regression = false;
+  // A protected-logic call failing mid-run (seen in practice: the Worker's CPU time limit, hit
+  // intermittently on detect-zod-schema batches) silently degrades findings to their safe local
+  // fallback rather than crashing -- correct behavior for a real scan, but it means THIS run's
+  // numbers are not a trustworthy baseline/regression signal: a real detection regression and a
+  // transient Worker failure produce the same symptom (fewer findings than expected) and must not be
+  // conflated. Any failure anywhere in the run invalidates the whole run for that purpose.
+  const failedRepos: string[] = [];
 
   for (const repo of manifest.repos) {
     console.error(`\n=== ${repo.name} (${repo.pinnedSha.slice(0, 12)}) ===`);
@@ -105,7 +112,10 @@ async function main(): Promise<void> {
     const scanResult = await scan(repoDir);
 
     const { findings: scoredFindings, warning } = await resolveProtectedLogic(scanResult.findings, scanResult.pendingZodCandidates, endpoint);
-    if (warning) console.error(`  protected-logic warning: ${warning}`);
+    if (warning) {
+      console.error(`  protected-logic warning: ${warning}`);
+      failedRepos.push(repo.name);
+    }
 
     const score = scoreCorpus(repo.name, scoredFindings, expected);
     results[repo.name] = score;
@@ -148,6 +158,18 @@ async function main(): Promise<void> {
       console.error(`  REGRESSION: real-PII recall dropped from ${(prior.recallRealPii * 100).toFixed(0)}% to ${(score.recallRealPii * 100).toFixed(0)}%`);
       regression = true;
     }
+  }
+
+  if (failedRepos.length > 0) {
+    console.error(
+      `\nRUN INVALID: protected-logic call(s) failed for ${failedRepos.join(", ")}. This run's numbers may ` +
+        `understate real recall (a failed call falls back to the safe local default, same symptom as a real ` +
+        `regression) -- not used for baseline comparison or regression gating, and the baseline was NOT updated` +
+        `${updateBaseline ? " despite --update-baseline being passed" : ""}. Re-run when the protected-logic ` +
+        `service is responding reliably.`
+    );
+    process.exitCode = 1;
+    return;
   }
 
   if (updateBaseline) {
