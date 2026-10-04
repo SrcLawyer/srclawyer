@@ -13,6 +13,13 @@
       "pinnedSha": "cd1c6a3d79d6d3dca9ee97e44f2e62f44f8dc474",
       "license": "AGPL-3.0-only for the core repo; a separate proprietary license governs apps/web/modules/ee, and packages/js/, packages/android/, packages/ios/, packages/api/ are MIT (see the repo's own LICENSE). Cloned in full for local scan purposes only, which AGPL permits; expected-findings entries below deliberately cite only non-(ee) paths.",
       "notes": "Survey/forms product with a large public OpenAPI spec at the repo root (openapi.yml) containing many genuinely ambiguous field names — a good stress test for confidence scoring. Real Stripe billing exists but only under the proprietary ee/billing subtree, so it is intentionally excluded from ground truth here. Real sign-up PII collection goes through Zod-validated Next.js Server Actions rather than req.body/request.json(), which Layer 1 does not parse today — a genuine, verified recall gap captured below."
+    },
+    {
+      "name": "microblog",
+      "url": "https://github.com/miguelgrinberg/microblog.git",
+      "pinnedSha": "a975ef64864354867c88e0ed3a17ba7d17dca752",
+      "license": "MIT (see the repo's own LICENSE).",
+      "notes": "Flask tutorial app (Miguel Grinberg's Flask Mega-Tutorial reference implementation) — first real-world fixture for Python Stage A. No third-party processor SDKs (email goes through Flask-Mail/SMTP, not a recognized pip-import processor), so this repo mainly stress-tests the Flask request-field rule rather than sdk-rule: a few request.args.get(...) pagination/redirect params that aren't actually PII (false-positive risk for the lexicon), and a genuine, verified gap where real signup PII (username/email/password) is read via request.get_json() + dict-key access on a local variable rather than a direct request.json[...] subscript, which Stage A does not parse today."
     }
   ],
   "methodology": "Each repo is shallow-cloned at test time via `git fetch --depth 1 origin <pinnedSha>` into scratch space, never vendored into this repository. Ground-truth entries in expected-findings/<name>.json are matched loosely by {filePattern, lineRange, dataCategory, minConfidence} against actual scan output — never by exact description text, so internal rule refactors don't make the corpus brittle. Recall against this manifest is a hard regression gate (see scripts/scoreCorpus.ts); precision is tracked but held to a looser bar, since new true positives beyond what's hand-curated here are welcome, not a regression."

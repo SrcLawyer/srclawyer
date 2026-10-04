@@ -3,9 +3,24 @@ import { parseSource } from "../src/engine/astUtils.js";
 import { runFrameworkRules } from "../src/rules/frameworkRules.js";
 import { runHtmlInputRules } from "../src/rules/htmlRules.js";
 import { parseOpenApiSpec } from "../src/schemaParsers/openapi.js";
+import { isSafeFieldName } from "../src/rules/safeFieldNames.js";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+describe("isSafeFieldName", () => {
+  it("treats the new pagination/sort names as safe, in any common separator style", () => {
+    for (const name of ["per_page", "perPage", "page_size", "pageSize", "cursor", "next_cursor", "prev_cursor", "sort_by", "order_by", "sort_order"]) {
+      expect(isSafeFieldName(name)).toBe(true);
+    }
+  });
+
+  it("does NOT treat next/prev/since/until/before/after/dir as safe -- the safe list is the only silent-drop path, and these are all plausible non-pagination PII elsewhere (e.g. a post-login redirect target)", () => {
+    for (const name of ["next", "prev", "since", "until", "before", "after", "dir", "direction"]) {
+      expect(isSafeFieldName(name)).toBe(false);
+    }
+  });
+});
 
 describe("safe field name allowlist", () => {
   it("suppresses structural fields like id/createdAt/status entirely instead of flagging them for review", () => {

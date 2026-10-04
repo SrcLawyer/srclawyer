@@ -24,6 +24,7 @@ function makeExpected(overrides: Partial<ExpectedFinding>): ExpectedFinding {
     lineRange: [1, 20],
     dataCategory: "email",
     minConfidence: "low",
+    classification: "real_pii",
     ...overrides,
   };
 }
@@ -76,51 +77,83 @@ describe("findingMatchesExpected", () => {
 });
 
 describe("scoreCorpus", () => {
-  it("computes 100% recall when every expected entry is matched by some finding", () => {
+  it("computes 100% real-PII recall when every real_pii entry is matched by some finding", () => {
     const findings = [makeFinding({ location: { file: "a.ts", line: 5, column: 0 }, dataCategories: ["email"] })];
-    const expected = [makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email" })];
+    const expected = [makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email", classification: "real_pii" })];
 
     const score = scoreCorpus("repo", findings, expected);
 
-    expect(score.recall).toBe(1);
-    expect(score.unmatchedExpected).toHaveLength(0);
+    expect(score.recallRealPii).toBe(1);
+    expect(score.unmatchedRealPii).toHaveLength(0);
   });
 
-  it("computes partial recall and lists the unmatched expected entries when some are missed", () => {
+  it("computes partial real-PII recall and lists the unmatched real_pii entries when some are missed", () => {
     const findings = [makeFinding({ location: { file: "a.ts", line: 5, column: 0 }, dataCategories: ["email"] })];
     const expected = [
-      makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email" }),
-      makeExpected({ filePattern: "b.ts", lineRange: [1, 10], dataCategory: "name" }),
+      makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email", classification: "real_pii" }),
+      makeExpected({ filePattern: "b.ts", lineRange: [1, 10], dataCategory: "name", classification: "real_pii" }),
     ];
 
     const score = scoreCorpus("repo", findings, expected);
 
-    expect(score.recall).toBe(0.5);
-    expect(score.unmatchedExpected).toEqual([expected[1]]);
+    expect(score.recallRealPii).toBe(0.5);
+    expect(score.unmatchedRealPii).toEqual([expected[1]]);
   });
 
-  it("treats an empty expected set as trivially 100% recall (nothing to miss)", () => {
+  it("treats an empty real_pii expected set as trivially 100% recall (nothing to miss)", () => {
     const score = scoreCorpus("repo", [makeFinding({})], []);
-    expect(score.recall).toBe(1);
+    expect(score.recallRealPii).toBe(1);
   });
 
-  it("computes precision only from findings that match some expected entry, without gating on it", () => {
-    const matching = makeFinding({ location: { file: "a.ts", line: 5, column: 0 }, dataCategories: ["email"] });
-    const extra = makeFinding({ location: { file: "unrelated.ts", line: 1, column: 0 }, dataCategories: ["phone"] });
-    const expected = [makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email" })];
+  it("excludes documented_non_pii entries from real-PII recall entirely", () => {
+    const expected = [makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "generic_pii", classification: "documented_non_pii" })];
 
-    const score = scoreCorpus("repo", [matching, extra], expected);
+    const score = scoreCorpus("repo", [], expected);
 
-    expect(score.recall).toBe(1);
-    expect(score.findingsMatchingSomeExpected).toBe(1);
-    expect(score.precision).toBe(0.5);
+    expect(score.totalExpectedRealPii).toBe(0);
+    expect(score.recallRealPii).toBe(1);
+    expect(score.totalExpectedDocumentedNonPii).toBe(1);
+    expect(score.matchedDocumentedNonPii).toBe(0);
   });
 
-  it("does not crash on zero findings and reports 0% precision, not a divide-by-zero", () => {
+  it("splits every finding into real-PII, documented-non-PII, or unmatched, summing to totalFindings", () => {
+    const realPiiFinding = makeFinding({ location: { file: "a.ts", line: 5, column: 0 }, dataCategories: ["email"] });
+    const nonPiiFinding = makeFinding({ location: { file: "a.ts", line: 15, column: 0 }, dataCategories: ["generic_pii"] });
+    const unmatchedFinding = makeFinding({ location: { file: "unrelated.ts", line: 1, column: 0 }, dataCategories: ["phone"] });
+    const expected = [
+      makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email", classification: "real_pii" }),
+      makeExpected({ filePattern: "a.ts", lineRange: [11, 20], dataCategory: "generic_pii", classification: "documented_non_pii" }),
+    ];
+
+    const score = scoreCorpus("repo", [realPiiFinding, nonPiiFinding, unmatchedFinding], expected);
+
+    expect(score.recallRealPii).toBe(1);
+    expect(score.findingsRealPii).toBe(1);
+    expect(score.findingsDocumentedNonPii).toBe(1);
+    expect(score.findingsUnmatched).toBe(1);
+    expect(score.findingsRealPii + score.findingsDocumentedNonPii + score.findingsUnmatched).toBe(score.totalFindings);
+  });
+
+  it("classifies a finding matching both a real_pii and a documented_non_pii entry as real_pii (ties go to the more consequential classification)", () => {
+    const finding = makeFinding({ location: { file: "a.ts", line: 5, column: 0 }, dataCategories: ["email"] });
+    const expected = [
+      makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email", classification: "documented_non_pii" }),
+      makeExpected({ filePattern: "a.ts", lineRange: [1, 10], dataCategory: "email", classification: "real_pii" }),
+    ];
+
+    const score = scoreCorpus("repo", [finding], expected);
+
+    expect(score.findingsRealPii).toBe(1);
+    expect(score.findingsDocumentedNonPii).toBe(0);
+  });
+
+  it("does not crash on zero findings and reports 0 for every findings-breakdown count, not a divide-by-zero", () => {
     const expected = [makeExpected({})];
     const score = scoreCorpus("repo", [], expected);
 
-    expect(score.recall).toBe(0);
-    expect(score.precision).toBe(0);
+    expect(score.recallRealPii).toBe(0);
+    expect(score.findingsRealPii).toBe(0);
+    expect(score.findingsDocumentedNonPii).toBe(0);
+    expect(score.findingsUnmatched).toBe(0);
   });
 });

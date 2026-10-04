@@ -1,0 +1,66 @@
+[
+  {
+    "filePattern": "app/api/users.py",
+    "lineRange": [46, 78],
+    "dataCategory": "email",
+    "minConfidence": "low",
+    "classification": "real_pii",
+    "note": "create_user()/update_user() read `data = request.get_json()` then access `data['email']` (lines 54, 75, 77) on the local variable. Baseline: DETECTED via framework-rule's same-function alias tracking (data = request.get_json(); data['email'])."
+  },
+  {
+    "filePattern": "app/api/users.py",
+    "lineRange": [46, 78],
+    "dataCategory": "name",
+    "minConfidence": "low",
+    "classification": "real_pii",
+    "note": "Same alias pattern as above — data['username'] (lines 51, 71, 73), classified under the lexicon's generic \"name\" bucket. Baseline: DETECTED via framework-rule's same-function alias tracking."
+  },
+  {
+    "filePattern": "app/models.py",
+    "lineRange": [252, 257],
+    "dataCategory": "authentication_credentials",
+    "minConfidence": "low",
+    "classification": "real_pii",
+    "note": "INTENTIONAL, DOCUMENTED GAP (not a bug): User.from_dict() reads `data['password']` (line 257) and hashes it via set_password(). `data` here is a FUNCTION PARAMETER of from_dict(), aliased from the caller's own `data = request.get_json()` variable in users.py (user.from_dict(data, ...)) — a cross-function alias, one hop further than the same-function alias tracking the Stage A Flask rule does (data = request.get_json(); data['x'] within one function body). Real credential collection, currently undetected. Kept in ground truth so the gap stays visible in recall rather than silently disappearing."
+  },
+  {
+    "filePattern": "app/auth/routes.py",
+    "lineRange": [26, 26],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "classification": "documented_non_pii",
+    "note": "`request.args.get('next')` — a post-login redirect target, not personal data. Baseline: DETECTED via framework-rule (requiresReview: true). Known false-positive-risk case: \"next\" isn't in the safe-field-name list, so it surfaces as a low-confidence generic_pii finding even though it carries no real privacy content."
+  },
+  {
+    "filePattern": "app/api/users.py",
+    "lineRange": [19, 40],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "classification": "documented_non_pii",
+    "note": "`request.args.get('per_page', 10, type=int)` (get_users/get_followers/get_following) — a pagination page-size integer, not personal data. UPDATED: \"perpage\" was added to the safe-field-name allowlist after this was found, so it's now correctly suppressed entirely (no finding emitted at all) rather than surfacing as a flagged-for-review false positive. Kept in ground truth, now as an always-unmatched documented_non_pii entry, as a record of why this location is intentionally silent -- not a regression if it stops matching."
+  },
+  {
+    "filePattern": "app/main/routes.py",
+    "lineRange": [233, 233],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "classification": "documented_non_pii",
+    "note": "`request.args.get('since', 0.0, type=float)` — a timestamp cursor for incremental export polling, not personal data. Baseline: DETECTED via framework-rule. Same false-positive-risk class as \"next\"/\"per_page\" above."
+  },
+  {
+    "filePattern": "app/main/routes.py",
+    "lineRange": [160, 160],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "classification": "real_pii",
+    "note": "translate_text(): `data = request.get_json()` (line 159) then `data['text']` (line 160) — real, genuinely privacy-relevant free-text content, forwarded to the Microsoft Translator REST API via a plain `requests.post()` call (app/translate.py), not a recognized pip-import SDK, so no separate sdk-rule finding is expected here. Found during this session via the new same-function alias tracking; missed in the original hand-verification pass because the original grep for direct request.form/json/args usage didn't surface get_json()-based routes. Baseline: DETECTED via framework-rule. Line range intentionally narrow (160 only) so it can't also swallow the source_language/dest_language lines below -- an earlier, wider [159,162] version of this entry did exactly that and silently misclassified both as real_pii."
+  },
+  {
+    "filePattern": "app/main/routes.py",
+    "lineRange": [161, 162],
+    "dataCategory": "generic_pii",
+    "minConfidence": "low",
+    "classification": "documented_non_pii",
+    "note": "Same translate_text() call, `data['source_language']` (line 161) / `data['dest_language']` (line 162) — language codes, not personal data. Same false-positive-risk class as \"next\"/\"per_page\"/\"since\" above. Baseline: DETECTED via framework-rule's same-function alias tracking."
+  }
+]
