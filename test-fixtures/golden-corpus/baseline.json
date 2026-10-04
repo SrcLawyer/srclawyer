@@ -4,5 +4,8 @@
   },
   "formbricks": {
     "recall": 1
+  },
+  "microblog": {
+    "recall": 0.5
   }
 }
