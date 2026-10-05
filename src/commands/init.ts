@@ -11,6 +11,7 @@ import {
   type SrcLawyerConfig,
   type SrcLawyerTier,
 } from "../config/config.js";
+import { NETWORK_CALLS_NOTICE } from "../policy/legalNotices.js";
 
 function guessIndustry(root: string): string | null {
   const pkgPath = join(root, "package.json");
@@ -50,6 +51,9 @@ export async function runInit(root: string): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const lines = rl[Symbol.asyncIterator]();
 
+  // Printed once, here, not re-shown on every scan -- informational only, never blocks: nothing below
+  // waits on an acknowledgment, so this is safe in non-interactive contexts (CI, scripted installs).
+  console.log(`${NETWORK_CALLS_NOTICE}\n`);
   console.log("SrcLawyer setup — answered once, reused on every scan.\n");
 
   const entityLocation = await ask(lines, "Where is your legal entity located? (country)", DEFAULT_CONFIG.entityLocation ?? "");

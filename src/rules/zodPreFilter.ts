@@ -23,13 +23,20 @@ const ZOD_IMPORT_RE = /from\s+["']zod(?:\/v[34](?:-mini)?)?["']/;
 const ANCHOR_CALL_RE = /\.(?:parse|safeParse|parseAsync|safeParseAsync|inputSchema)\s*\(/;
 
 /**
- * An individual fragment this large is unlikely on real request-validation schemas and risky to send
- * at all: the protected-logic Worker has a hard CPU time limit, confirmed (via wrangler tail) to be
- * exceeded intermittently by large detect-zod-schema batches. A single over-cap fragment is dropped
- * entirely rather than sent and risking it alone blowing the whole batch's CPU budget -- the caller
- * surfaces which file was skipped (see oversizedFiles below) so the gap is never silent.
+ * A hard ceiling, not a normal operating limit: protectedLogicClient.ts now batches by total bytes,
+ * so a large fragment is sent ALONE in its own request rather than bundled with others -- the actual
+ * per-batch CPU risk that caused intermittent "Worker exceeded CPU time limit" failures (confirmed via
+ * wrangler tail) is handled there, not here. This constant exists only to refuse something pathological
+ * (e.g. a machine-generated file with one enormous schema), not to cap ordinary real-world files.
+ *
+ * Measured (uncapped) across the three golden-corpus repos: max 41,992 bytes
+ * (formbricks/packages/types/surveys/types.ts), mean ~4,000-5,000 bytes. Set well above that observed
+ * max, with margin, specifically so formbricks' signup action (9,997 bytes -- see notes in the private
+ * repo for the full breakdown) is sent rather than skipped. This value is PROVISIONAL and unvalidated
+ * against the real Worker limit: that depends on a Cloudflare plan upgrade that hasn't happened yet.
+ * Revisit once the upgrade is confirmed and the 10-run wrangler tail test has been repeated.
  */
-export const MAX_FRAGMENT_BYTES = 8_000;
+export const MAX_FRAGMENT_BYTES = 65_536;
 
 // Resolving "which identifier does this anchor call reference, and where is IT declared at the top
 // level" is plain lexical lookup, not the protected scope-boundary judgment — safe to do locally so a

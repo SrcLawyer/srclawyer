@@ -8,6 +8,7 @@ import { resolveProtectedLogic } from "../src/cloud/resolveProtectedLogic.js";
 import { resolveProtectedLogicEndpoint } from "../src/cloud/config.js";
 import { resolveProviderForTier } from "../src/llm/resolveProviderForTier.js";
 import { resolveAmbiguousFindings } from "../src/llm/resolveAmbiguousFindings.js";
+import { MAX_FRAGMENT_BYTES } from "../src/rules/zodPreFilter.js";
 import type { Finding } from "../src/engine/types.js";
 import type { SrcLawyerConfig } from "../src/config/config.js";
 import { scoreCorpus, type ExpectedFinding } from "./corpusScoring.js";
@@ -126,6 +127,9 @@ async function main(): Promise<void> {
     results[repo.name] = score;
 
     console.error(`  filesScanned: ${scanResult.filesScanned}, totalFindings: ${score.totalFindings}`);
+    if (scanResult.maxZodFragmentBytes > 0) {
+      console.error(`  largest Zod-schema fragment: ${scanResult.maxZodFragmentBytes} bytes (hard ceiling: ${MAX_FRAGMENT_BYTES} bytes)`);
+    }
     console.error(
       `  [Layer 1 only] recall of real PII: ${score.matchedRealPii}/${score.totalExpectedRealPii} = ${(score.recallRealPii * 100).toFixed(0)}%   ` +
         `(documented non-PII still flagged: ${score.matchedDocumentedNonPii}/${score.totalExpectedDocumentedNonPii})`
