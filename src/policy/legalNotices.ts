@@ -1,7 +1,9 @@
-// Placeholder destinations -- fill in with real URLs before these are relied on by anything but this
-// file. Kept as named constants precisely so there's one place to update, not scattered literals.
-export const PRIVACY_POLICY_URL = "https://example.invalid/srclawyer/privacy";
-export const TERMS_URL = "https://example.invalid/srclawyer/terms";
+// No dedicated privacy-policy/terms site exists yet -- these point at the real, resolvable README
+// sections that cover the same ground today (not a placeholder or a dead `.invalid` link), and should
+// be repointed to a real site once one exists. Kept as named constants precisely so there's one place
+// to update when that happens.
+export const PRIVACY_POLICY_URL = "https://github.com/SrcLawyer/srclawyer#network-calls";
+export const TERMS_URL = "https://github.com/SrcLawyer/srclawyer#readme";
 
 // Verbatim from README.md's own "Network calls" section (minus markdown backticks, since this prints
 // to a terminal) -- one wording for this claim, not a second paraphrase that can drift from the first.
