@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findZodCandidates } from "../src/rules/zodPreFilter.js";
+import { parseSource } from "../src/engine/astUtils.js";
 
 describe("findZodCandidates", () => {
   it("finds nothing when there's no zod import at all", () => {
@@ -84,11 +85,10 @@ describe("findZodCandidates", () => {
     expect(candidates[0].codeFragment).toContain("bodySchema = z.object");
   });
 
-  it("includes the whole enclosing statement, and produces a fragment that still parses, when the anchor sits deep inside a long function body", () => {
-    // Real golden-corpus bug: an earlier +/-N-line window around the anchor call cut off partway
-    // through the enclosing function, leaving unclosed braces — the resulting fragment failed to parse
-    // server-side entirely (silently: zero fields, not an error). Extracting the whole top-level
-    // statement the anchor lives in — however long — is what actually guarantees valid syntax.
+  it("elides an unrelated handler body down to an empty block, but keeps the statement syntactically valid and the schema/anchor intact", () => {
+    // Real golden-corpus shape: formbricks' signup action wraps ~130 unrelated lines of business
+    // logic around the anchor. None of that logic affects whether ZCreateUserAction validates
+    // incoming request data -- the Worker's judgment only needs the schema and the anchor's shape.
     const bodyLines = Array.from({ length: 120 }, (_, i) => `  doSomething(${i});`);
     const source = [
       `import { z } from "zod";`,
@@ -103,23 +103,52 @@ describe("findZodCandidates", () => {
     const fragment = candidates[0].codeFragment;
     expect(fragment).toContain("bodySchema = z.object");
     expect(fragment).toContain("inputSchema(bodySchema)");
-    expect(fragment).toContain("doSomething(0)");
-    expect(fragment).toContain("doSomething(119)");
-    expect(fragment.trim().endsWith("});")).toBe(true);
+    expect(fragment).not.toContain("doSomething");
+    // Still a real Program on its own -- an empty-bodied async arrow is valid syntax, not a guess.
+    expect(parseSource(fragment, "/root/fragment.ts")).not.toBeNull();
+  });
+
+  it("does NOT elide a handler body that itself contains the anchor -- that content is the whole point of sending the fragment", () => {
+    const source = [
+      `import { z } from "zod";`,
+      `const schema = z.object({ email: z.string() });`,
+      `app.post("/signup", async (req, res) => {`,
+      `  const parsed = schema.parse(req.body);`,
+      `  doSomethingUnrelated();`,
+      `});`,
+    ].join("\n");
+    const { candidates } = findZodCandidates(source, "/root/server.ts", "/root");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].codeFragment).toContain("schema.parse(req.body)");
+  });
+
+  it("includes only imports actually referenced by the sent fragment, not every import in the file", () => {
+    const source = [
+      `import { z } from "zod";`,
+      `import { unusedHelper } from "./unused-helper";`,
+      `import { ZId } from "./zod-helpers";`,
+      `const schema = z.object({ id: ZId, email: z.string() });`,
+      `schema.parse(req.body);`,
+    ].join("\n");
+    const { candidates } = findZodCandidates(source, "/root/actions.ts", "/root");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].codeFragment).toContain(`import { ZId } from "./zod-helpers"`);
+    expect(candidates[0].codeFragment).not.toContain("unusedHelper");
   });
 
   describe("oversized fragments", () => {
     it("drops a fragment exceeding MAX_FRAGMENT_BYTES and reports the file as oversized instead of sending it", () => {
-      // A synthetic, deliberately huge enclosing function -- the exact shape (a real golden-corpus
-      // file's enclosing function or import list growing unreasonably large) that risked tipping a
-      // detect-zod-schema batch over the Worker's CPU time limit (confirmed via wrangler tail).
-      const bodyLines = Array.from({ length: 2000 }, (_, i) => `  doSomethingWithAVeryLongStatementName(${i});`);
+      // The schema itself, not a handler body, has to be what's huge here -- an oversized handler
+      // body would just get elided down to {} like the test above, no longer tripping the cap at all.
+      const schemaFields = Array.from({ length: 2000 }, (_, i) => `  fieldWithAVeryLongNameIndeed${i}: z.string(),`);
       const source = [
         `import { z } from "zod";`,
-        `const bodySchema = z.object({ email: z.string() });`,
-        `export const createUserAction = actionClient.inputSchema(bodySchema).action(async () => {`,
-        ...bodyLines,
+        `const bodySchema = z.object({`,
+        ...schemaFields,
         `});`,
+        `bodySchema.parse(req.body);`,
       ].join("\n");
 
       const { candidates, oversizedFiles } = findZodCandidates(source, "/root/huge-actions.ts", "/root");

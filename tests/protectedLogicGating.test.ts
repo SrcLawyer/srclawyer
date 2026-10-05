@@ -121,16 +121,12 @@ describe("runScan protected-logic gating", () => {
       throw new Error(`unexpected fetch to ${url}`);
     });
 
-    const bodyLines = Array.from({ length: 2000 }, (_, i) => `  doSomethingWithAVeryLongStatementName(${i});`);
+    // The schema itself, not a handler body, has to be what's huge here -- trimmed extraction elides
+    // an oversized handler body down to {}, so only an oversized schema can still trip the cap.
+    const schemaFields = Array.from({ length: 2000 }, (_, i) => `  fieldWithAVeryLongNameIndeed${i}: z.string(),`);
     writeFileSync(
       join(dir, "huge-actions.ts"),
-      [
-        'import { z } from "zod";',
-        "const bodySchema = z.object({ email: z.string() });",
-        "export const createUserAction = actionClient.inputSchema(bodySchema).action(async () => {",
-        ...bodyLines,
-        "});",
-      ].join("\n")
+      ['import { z } from "zod";', "const bodySchema = z.object({", ...schemaFields, "});", "bodySchema.parse(req.body);"].join("\n")
     );
 
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
