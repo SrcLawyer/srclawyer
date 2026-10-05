@@ -26,8 +26,16 @@ export async function resolveProtectedLogic(
   const warnings: string[] = [];
 
   if (oversizedZodFiles.length > 0) {
+    // Kept to a single summarized line -- this list is meant to be rare now that the hard ceiling is
+    // only for pathological cases (see MAX_FRAGMENT_BYTES), but a long list here would still be an
+    // unreadable wall of text. The full, untruncated list is always in ScanResult.oversizedZodFiles
+    // (surfaced in --json output), so nothing here is actually lost, just not all printed inline.
+    const PREVIEW_COUNT = 3;
+    const preview = oversizedZodFiles.slice(0, PREVIEW_COUNT).join(", ");
+    const remaining = oversizedZodFiles.length - PREVIEW_COUNT;
+    const suffix = remaining > 0 ? `, and ${remaining} more (full list in --json output)` : "";
     warnings.push(
-      `Zod-schema detection skipped for ${oversizedZodFiles.length} file(s) because the extracted fragment was too large to send safely: ${oversizedZodFiles.join(", ")}.`
+      `Zod-schema detection skipped for ${oversizedZodFiles.length} file(s) because the extracted fragment was too large to send safely: ${preview}${suffix}.`
     );
   }
 

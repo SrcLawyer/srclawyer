@@ -143,6 +143,18 @@ export async function scan(root: string): Promise<ScanResult> {
   }
 
   const ambiguousCount = findings.filter((f) => f.requiresReview).length;
+  const maxZodFragmentBytes = pendingZodCandidates.length
+    ? Math.max(...pendingZodCandidates.map((c) => Buffer.byteLength(c.codeFragment, "utf8")))
+    : 0;
 
-  return { projects, findings, ambiguousCount, filesScanned, unsupportedStackWarning, pendingZodCandidates, oversizedZodFiles };
+  return {
+    projects,
+    findings,
+    ambiguousCount,
+    filesScanned,
+    unsupportedStackWarning,
+    pendingZodCandidates,
+    oversizedZodFiles,
+    maxZodFragmentBytes,
+  };
 }

@@ -92,4 +92,9 @@ export interface ScanResult {
    *  dropped before ever reaching pendingZodCandidates -- surfaced in resolveProtectedLogic()'s
    *  warning so a schema going unchecked is never silent, just like a failed network call is. */
   oversizedZodFiles: string[];
+  /** The largest pendingZodCandidates fragment's byte size this scan, or 0 if none. Logged by the
+   *  caller so real-world fragment sizes keep being observed against MAX_FRAGMENT_BYTES
+   *  (zodPreFilter.ts) and the batching cap (protectedLogicClient.ts) -- both are provisional,
+   *  unvalidated against the Worker's real limit until its plan upgrade is confirmed. */
+  maxZodFragmentBytes: number;
 }

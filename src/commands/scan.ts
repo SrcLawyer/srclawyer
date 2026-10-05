@@ -8,6 +8,7 @@ import { resolveProviderForTier } from "../llm/resolveProviderForTier.js";
 import { resolveAmbiguousFindings } from "../llm/resolveAmbiguousFindings.js";
 import { resolveProtectedLogic } from "../cloud/resolveProtectedLogic.js";
 import { resolveProtectedLogicEndpoint } from "../cloud/config.js";
+import { MAX_FRAGMENT_BYTES } from "../rules/zodPreFilter.js";
 import type { Finding } from "../engine/types.js";
 
 export interface ScanOptions {
@@ -30,6 +31,10 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
 
   const result = await scan(root);
   let findings: Finding[] = result.findings;
+
+  if (result.maxZodFragmentBytes > 0) {
+    console.error(`Largest Zod-schema fragment this scan: ${result.maxZodFragmentBytes} bytes (hard ceiling: ${MAX_FRAGMENT_BYTES} bytes).`);
+  }
 
   // Not tier-gated, not behind --no-llm: confidence scoring and Zod-schema detection are Layer 1
   // capabilities now, needed on every real scan regardless of which LLM tier (if any) is configured.
