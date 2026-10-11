@@ -253,6 +253,26 @@ describe("generatePolicyMarkdown", () => {
       expect(markdown).toContain("[TO COMPLETE: site or app URL]");
       expect(markdown).toContain("[TO COMPLETE: privacy contact email address]");
     });
+
+    it("does not double a terminal period when the company name already ends with one", () => {
+      const markdown = generatePolicyMarkdown(makeScanResult({}), makeConfig({ companyName: "Acme Inc." }));
+
+      expect(markdown).toContain("This policy is issued by Acme Inc.\n");
+      expect(markdown).not.toContain("Acme Inc..");
+    });
+
+    it("does not append a stray period right after a trailing slash in a URL", () => {
+      const markdown = generatePolicyMarkdown(makeScanResult({}), makeConfig({ siteUrl: "https://acme.example/" }));
+
+      expect(markdown).toContain("available at https://acme.example/\n");
+      expect(markdown).not.toContain("https://acme.example/.");
+    });
+
+    it("still appends a period when the value has no trailing punctuation", () => {
+      const markdown = generatePolicyMarkdown(makeScanResult({}), makeConfig({ companyName: "Acme Inc" }));
+
+      expect(markdown).toContain("This policy is issued by Acme Inc.\n");
+    });
   });
 
   describe("Data Retention, Deletion, and Use", () => {

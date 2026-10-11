@@ -145,6 +145,15 @@ function valueOrPlaceholder(value: string | null | undefined, label: string, pla
   return value;
 }
 
+// Avoids a double terminal punctuation mark when a user-supplied value already ends with one --
+// e.g. a company name ending in "." ("Acme Inc.") or a URL ending in "/" (where appending "." right
+// after the slash reads as part of the path). The placeholder marker itself ends with "]", so this
+// never double-punctuates that either.
+function endSentence(prefix: string, value: string): string {
+  const trimmed = value.trim();
+  return /[.!?/\]]$/.test(trimmed) ? `${prefix}${trimmed}` : `${prefix}${trimmed}.`;
+}
+
 function triStateSentence(
   value: boolean | null | undefined,
   label: string,
@@ -165,9 +174,9 @@ function renderIdentitySection(config: SrcLawyerConfig | null, placeholders: str
   return [
     "## About This Policy",
     "",
-    `This policy is issued by ${companyName}.`,
-    `It applies to the product or service available at ${siteUrl}.`,
-    `Questions about this policy or requests regarding your personal data can be sent to ${privacyContactEmail}.`,
+    endSentence("This policy is issued by ", companyName),
+    endSentence("It applies to the product or service available at ", siteUrl),
+    endSentence("Questions about this policy or requests regarding your personal data can be sent to ", privacyContactEmail),
   ].join("\n");
 }
 

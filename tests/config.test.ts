@@ -128,6 +128,14 @@ describe("optional policy-detail fields", () => {
     const loaded = loadConfig(dir);
     expect(loaded?.collectsChildrensData).toBe(false);
   });
+
+  it("collectsChildrensData round-trips an explicit true", () => {
+    const dir = tempDir();
+    writeConfig(dir, { ...DEFAULT_CONFIG, collectsChildrensData: true });
+
+    const loaded = loadConfig(dir);
+    expect(loaded?.collectsChildrensData).toBe(true);
+  });
 });
 
 describe("legacy config rename safeguard", () => {

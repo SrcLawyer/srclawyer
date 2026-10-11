@@ -53,7 +53,7 @@ Section: `## Children's Privacy`. Two facts: `collectsChildrensData` (true / fal
 **Knowingly collects children's data** (config: `collectsChildrensData`):
 - **True**: `This product knowingly collects personal data from children under applicable age thresholds (e.g. under 13 in the US, under 16 in the EU where applicable).`
 - **False**: `This product does not knowingly collect personal data from children under applicable age thresholds.`
-- **Unanswered** (the key is absent from `.srclawyer.config.yml` — a pre-0.6.1 file, or a hand-edited one): `[TO COMPLETE: whether this product knowingly collects personal data from children]` — deliberately **not** rendered as "no": an absent key is distinct from an explicit "no" answer, which `init` always writes explicitly today.
+- **Unanswered** — the key is absent from `.srclawyer.config.yml` (a pre-0.6.1 file, or a hand-edited one), or `init`'s question for it was skipped (a bare Enter, empty stdin, or `--no-policy-details`/declining the gate with no `--collects-childrens-data`/`--no-collects-childrens-data` flag): `[TO COMPLETE: whether this product knowingly collects personal data from children]` — deliberately **not** rendered as "no." This question requires an explicit y/n; there is no default. Only an explicit true/false answer (interactive or via flag) ever produces the "yes"/"no" sentences above.
 
 **Minimum age** (config: `minimumAge`):
 - **Present**: `Users must be at least {minimumAge} years old to use this product.`

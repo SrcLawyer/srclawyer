@@ -15,6 +15,7 @@ import { NETWORK_CALLS_NOTICE } from "../policy/legalNotices.js";
 
 export interface InitFlags {
   policyDetails?: boolean;
+  collectsChildrensData?: boolean;
   companyName?: string;
   siteUrl?: string;
   privacyContactEmail?: string;
@@ -136,12 +137,19 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
   const targetMarketsRaw = await ask(lines, "Which regions/markets do you serve? (comma-separated, e.g. US, EU)", "");
   const targetMarkets = targetMarketsRaw.split(",").map((s) => s.trim()).filter(Boolean);
   const industry = await ask(lines, "What industry/vertical is this product in?", guessedIndustry ?? "");
-  const childrensDataRaw = await ask(lines, "Does this product knowingly collect data from children under 13/16?", "no");
 
   const gateYes = flags.policyDetails !== undefined
     ? flags.policyDetails
     : /^y(es)?$/i.test((await ask(lines, "Add privacy policy details now? (company info, data practices, regional rights, etc.)", "y")).trim());
 
+  // Deliberately requires an explicit y/n -- a bare Enter, empty stdin, or a declined gate must leave
+  // this null (unanswered, rendered as a placeholder), never silently "no". Unlike askOptional's other
+  // callers, there is no safe default here: "no" is itself a real, consequential legal declaration, not
+  // a neutral fallback. Layer 2's high-stakes override (scan.ts) coerces null to false at its one call
+  // site, so leaving this unanswered never weakens that safety check -- see childrensDataOverride.test.ts.
+  const collectsChildrensData = await resolveField(flags.collectsChildrensData, gateYes, () =>
+    askYesNoOptional(lines, "Does this product knowingly collect data from children under 13/16?")
+  );
   const minimumAge = await resolveField(flags.minimumAge, gateYes, () => askOptionalAge(lines, "Minimum age required to use this product"));
   const companyName = await resolveField(flags.companyName, gateYes, () => askOptional(lines, "Company or product name"));
   const siteUrl = await resolveField(flags.siteUrl, gateYes, () => askOptional(lines, "Site or app URL"));
@@ -197,7 +205,7 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
     entityLocation: entityLocation || null,
     targetMarkets,
     industry: industry || null,
-    collectsChildrensData: /^y(es)?$/i.test(childrensDataRaw.trim()),
+    collectsChildrensData,
     tier,
     ...(tier === "byok" ? { llm: { provider: "anthropic" as const, apiKeyEnvVar } } : {}),
     companyName,

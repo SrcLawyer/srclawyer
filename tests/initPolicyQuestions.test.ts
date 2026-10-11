@@ -21,6 +21,11 @@ async function runWithStdin(root: string, answers: string[], flags: InitFlags = 
   }
 }
 
+// Question order once the gate resolves to yes: entityLocation, targetMarkets, industry, gate,
+// collectsChildrensData, minimumAge, companyName, siteUrl, privacyContactEmail, hasEuUkUsers,
+// hasCaliforniaUsers, sellsOrSharesData, usesDataForAdvertising, dataRetentionPolicy,
+// accountDeletionInstructions, sendsDataToAiServices, enableByok.
+
 describe("init: optional policy-detail questions", () => {
   let dir: string;
   let logSpy: ReturnType<typeof vi.spyOn>;
@@ -30,7 +35,7 @@ describe("init: optional policy-detail questions", () => {
     vi.restoreAllMocks();
   });
 
-  it("the gate defaults to yes and asks all eleven sub-questions, writing every answer", async () => {
+  it("the gate defaults to yes and asks all twelve sub-questions, writing every answer", async () => {
     dir = tempDir();
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -38,8 +43,8 @@ describe("init: optional policy-detail questions", () => {
       "US", // entityLocation
       "EU, US", // targetMarkets
       "SaaS", // industry
-      "no", // collectsChildrensData
       "", // gate -- blank adopts default "y"
+      "n", // collectsChildrensData -- requires an explicit y/n
       "13", // minimumAge
       "Acme Inc.", // companyName
       "https://acme.example", // siteUrl
@@ -55,6 +60,7 @@ describe("init: optional policy-detail questions", () => {
     ]);
 
     const config = loadConfig(dir);
+    expect(config?.collectsChildrensData).toBe(false);
     expect(config?.minimumAge).toBe(13);
     expect(config?.companyName).toBe("Acme Inc.");
     expect(config?.siteUrl).toBe("https://acme.example");
@@ -68,7 +74,7 @@ describe("init: optional policy-detail questions", () => {
     expect(config?.sendsDataToAiServices).toBe(false);
   });
 
-  it("declining the gate leaves all eleven fields null and asks none of the sub-questions", async () => {
+  it("declining the gate leaves all twelve fields null and asks none of the sub-questions", async () => {
     dir = tempDir();
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -77,12 +83,12 @@ describe("init: optional policy-detail questions", () => {
       "US",
       "",
       "",
-      "no",
       "n", // decline the gate
       "n", // enable byok
     ]);
 
     const config = loadConfig(dir);
+    expect(config?.collectsChildrensData).toBeNull();
     expect(config?.minimumAge).toBeNull();
     expect(config?.companyName).toBeNull();
     expect(config?.siteUrl).toBeNull();
@@ -98,23 +104,93 @@ describe("init: optional policy-detail questions", () => {
     const promptedText = writeSpy.mock.calls.map((c) => String(c[0])).join("");
     expect(promptedText).not.toContain("Company or product name");
     expect(promptedText).not.toContain("Minimum age required");
+    expect(promptedText).not.toContain("knowingly collect data from children");
+  });
+
+  it("a bare Enter on the children's-data question leaves it null, never 'no'", async () => {
+    dir = tempDir();
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await runWithStdin(dir, [
+      "US",
+      "",
+      "",
+      "", // gate -- blank adopts default "y"
+      "", // collectsChildrensData -- blank, must stay null (not default to "no")
+      "", // minimumAge
+      "", // companyName
+      "", // siteUrl
+      "", // privacyContactEmail
+      "n", // hasEuUkUsers
+      "n", // hasCaliforniaUsers
+      "n", // sellsOrSharesData
+      "n", // usesDataForAdvertising
+      "", // dataRetentionPolicy
+      "", // accountDeletionInstructions
+      "n", // sendsDataToAiServices
+      "n", // enable byok
+    ]);
+
+    const config = loadConfig(dir);
+    expect(config?.collectsChildrensData).toBeNull();
+  });
+
+  it("empty stdin (fully non-interactive, no flags) leaves collectsChildrensData null", async () => {
+    dir = tempDir();
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const stdin = Readable.from([]);
+    const realStdin = process.stdin;
+    Object.defineProperty(process, "stdin", { value: stdin, configurable: true });
+    try {
+      await runInit(dir);
+    } finally {
+      Object.defineProperty(process, "stdin", { value: realStdin, configurable: true });
+    }
+
+    const config = loadConfig(dir);
+    expect(config?.collectsChildrensData).toBeNull();
+  });
+
+  it("--no-policy-details leaves collectsChildrensData null and never asks the question", async () => {
+    dir = tempDir();
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await runWithStdin(dir, ["US", "", "", "n"], { policyDetails: false });
+
+    const config = loadConfig(dir);
+    expect(config?.collectsChildrensData).toBeNull();
+
+    const promptedText = writeSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(promptedText).not.toContain("knowingly collect data from children");
+  });
+
+  it("--collects-childrens-data and --no-collects-childrens-data set an explicit value even when the gate is declined", async () => {
+    dir = tempDir();
+    logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const yesDir = tempDir();
+    await runWithStdin(yesDir, ["US", "", "", "n"], { policyDetails: false, collectsChildrensData: true });
+    expect(loadConfig(yesDir)?.collectsChildrensData).toBe(true);
+    rmSync(yesDir, { recursive: true, force: true });
+
+    await runWithStdin(dir, ["US", "", "", "n"], { policyDetails: false, collectsChildrensData: false });
+    expect(loadConfig(dir)?.collectsChildrensData).toBe(false);
   });
 
   it("an explicit per-field flag wins even when the gate is declined", async () => {
     dir = tempDir();
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await runWithStdin(
-      dir,
-      ["US", "", "", "no", "n"],
-      { policyDetails: false, companyName: "Flag Co.", minimumAge: 21 }
-    );
+    await runWithStdin(dir, ["US", "", "", "n"], { policyDetails: false, companyName: "Flag Co.", minimumAge: 21 });
 
     const config = loadConfig(dir);
     expect(config?.companyName).toBe("Flag Co.");
     expect(config?.minimumAge).toBe(21);
     // Fields neither flagged nor asked (gate declined) stay null.
     expect(config?.siteUrl).toBeNull();
+    expect(config?.collectsChildrensData).toBeNull();
   });
 
   it("--no-policy-details skips the gate prompt entirely and leaves unflagged fields null", async () => {
@@ -122,7 +198,7 @@ describe("init: optional policy-detail questions", () => {
     logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-    await runWithStdin(dir, ["US", "", "", "no", "n"], { policyDetails: false });
+    await runWithStdin(dir, ["US", "", "", "n"], { policyDetails: false });
 
     const promptedText = writeSpy.mock.calls.map((c) => String(c[0])).join("");
     expect(promptedText).not.toContain("Add privacy policy details now?");
@@ -136,8 +212,8 @@ describe("init: optional policy-detail questions", () => {
       "US",
       "EU", // targetMarkets signals EU
       "",
-      "no",
       "", // gate default yes
+      "n", // collectsChildrensData
       "", // minimumAge
       "", // companyName
       "", // siteUrl
@@ -167,12 +243,12 @@ describe("init: optional policy-detail questions", () => {
       "US",
       "EU",
       "",
-      "no",
-      "",
-      "",
-      "",
-      "",
-      "",
+      "", // gate
+      "n", // collectsChildrensData
+      "", // minimumAge
+      "", // companyName
+      "", // siteUrl
+      "", // privacyContactEmail
       "", // hasEuUkUsers -- blank, adopts the suggested "true"
       "n",
       "n",

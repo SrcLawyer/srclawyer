@@ -20,6 +20,7 @@ program
 
 interface InitCliOptions {
   policyDetails?: boolean;
+  collectsChildrensData?: boolean;
   companyName?: string;
   siteUrl?: string;
   privacyContactEmail?: string;
@@ -38,6 +39,8 @@ program
   .description("One-time setup: jurisdiction, markets, industry, and optional policy details (company info, data practices, regional rights)")
   .option("--policy-details", "ask the optional policy-detail questions (company info, data practices, regional rights)")
   .option("--no-policy-details", "skip all optional policy-detail questions, leaving them unanswered")
+  .option("--collects-childrens-data", "declare that this product knowingly collects data from children under 13/16")
+  .option("--no-collects-childrens-data", "declare that this product does not knowingly collect data from children under 13/16")
   .option("--company-name <name>", "company or product name")
   .option("--site-url <url>", "site or app URL")
   .option("--privacy-contact-email <email>", "privacy contact email address")
@@ -66,6 +69,7 @@ program
 
     await runInit(process.cwd(), {
       policyDetails: opts.policyDetails,
+      collectsChildrensData: opts.collectsChildrensData,
       companyName: opts.companyName,
       siteUrl: opts.siteUrl,
       privacyContactEmail: opts.privacyContactEmail,
