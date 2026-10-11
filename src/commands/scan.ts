@@ -67,7 +67,11 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
         }
         console.log(`Sending ${ambiguous.length} ambiguous item(s) to ${provider.name}...`);
         const resolved = await resolveAmbiguousFindings(ambiguous, provider, {
-          collectsChildrensData: config.collectsChildrensData,
+          // Preserves today's exact override behavior bit-for-bit: a missing/legacy key already
+          // behaved as false before collectsChildrensData became nullable. Only the generated
+          // document (generatePolicy.ts) distinguishes "explicitly no" from "never answered" -- this
+          // safety-critical override is unchanged.
+          collectsChildrensData: config.collectsChildrensData ?? false,
         });
         const resolvedById = new Map(resolved.map((f) => [f.id, f]));
         findings = findings.map((f) => resolvedById.get(f.id) ?? f);

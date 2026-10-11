@@ -18,17 +18,45 @@ export interface SrcLawyerConfig {
   entityLocation: string | null;
   targetMarkets: string[];
   industry: string | null;
-  collectsChildrensData: boolean;
+  // null means "never answered" (e.g. a hand-edited or pre-0.6.1 config missing this key), distinct
+  // from an explicit "no" -- see generatePolicy.ts's rendering of this field, and buildRequestItem's
+  // call site in scan.ts, which coerces null to false to preserve the existing Layer 2 override as-is.
+  collectsChildrensData: boolean | null;
   tier?: SrcLawyerTier;
   llm?: SrcLawyerLlmConfig;
+  // Everything below is optional, attorney-reviewable policy content -- never inferred, only ever
+  // what the user explicitly provided via `init` or by hand-editing this file. null/absent renders as
+  // a `[TO COMPLETE: ...]` placeholder in the generated policy, never a guessed or default value.
+  companyName?: string | null;
+  siteUrl?: string | null;
+  privacyContactEmail?: string | null;
+  hasEuUkUsers?: boolean | null;
+  hasCaliforniaUsers?: boolean | null;
+  sellsOrSharesData?: boolean | null;
+  usesDataForAdvertising?: boolean | null;
+  dataRetentionPolicy?: string | null;
+  accountDeletionInstructions?: string | null;
+  minimumAge?: number | null;
+  sendsDataToAiServices?: boolean | null;
 }
 
 export const DEFAULT_CONFIG: SrcLawyerConfig = {
   entityLocation: null,
   targetMarkets: [],
   industry: null,
-  collectsChildrensData: false,
+  collectsChildrensData: null,
   tier: "free",
+  companyName: null,
+  siteUrl: null,
+  privacyContactEmail: null,
+  hasEuUkUsers: null,
+  hasCaliforniaUsers: null,
+  sellsOrSharesData: null,
+  usesDataForAdvertising: null,
+  dataRetentionPolicy: null,
+  accountDeletionInstructions: null,
+  minimumAge: null,
+  sendsDataToAiServices: null,
 };
 
 export function configPath(root: string): string {

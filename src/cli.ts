@@ -18,11 +18,66 @@ program
   .description("Static analysis engine that derives privacy policy documentation directly from source code")
   .version(version);
 
+interface InitCliOptions {
+  policyDetails?: boolean;
+  companyName?: string;
+  siteUrl?: string;
+  privacyContactEmail?: string;
+  euUkUsers?: boolean;
+  californiaUsers?: boolean;
+  sellsOrSharesData?: boolean;
+  usesDataForAdvertising?: boolean;
+  dataRetentionPolicy?: string;
+  accountDeletionInstructions?: string;
+  minimumAge?: string;
+  sendsDataToAiServices?: boolean;
+}
+
 program
   .command("init")
-  .description("One-time setup: jurisdiction, markets, industry")
-  .action(async () => {
-    await runInit(process.cwd());
+  .description("One-time setup: jurisdiction, markets, industry, and optional policy details (company info, data practices, regional rights)")
+  .option("--policy-details", "ask the optional policy-detail questions (company info, data practices, regional rights)")
+  .option("--no-policy-details", "skip all optional policy-detail questions, leaving them unanswered")
+  .option("--company-name <name>", "company or product name")
+  .option("--site-url <url>", "site or app URL")
+  .option("--privacy-contact-email <email>", "privacy contact email address")
+  .option("--eu-uk-users", "declare that this product has users in the EU/UK")
+  .option("--no-eu-uk-users", "declare that this product has no users in the EU/UK")
+  .option("--california-users", "declare that this product has users in California")
+  .option("--no-california-users", "declare that this product has no users in California")
+  .option("--sells-or-shares-data", "declare that personal data is sold or shared with third parties")
+  .option("--no-sells-or-shares-data", "declare that personal data is not sold or shared with third parties")
+  .option("--uses-data-for-advertising", "declare that personal data is used for advertising")
+  .option("--no-uses-data-for-advertising", "declare that personal data is not used for advertising")
+  .option("--data-retention-policy <text>", "how long personal data is retained")
+  .option("--account-deletion-instructions <text>", "how a user can delete their account or request data deletion")
+  .option("--minimum-age <number>", "minimum age required to use this product")
+  .option("--sends-data-to-ai-services", "declare that user data is sent to third-party AI services")
+  .option("--no-sends-data-to-ai-services", "declare that user data is not sent to third-party AI services")
+  .action(async (opts: InitCliOptions) => {
+    let minimumAge: number | undefined;
+    if (opts.minimumAge !== undefined) {
+      const parsed = Number(opts.minimumAge);
+      if (!Number.isInteger(parsed) || parsed < 0) {
+        program.error(`error: --minimum-age must be a whole, non-negative number (got "${opts.minimumAge}")`);
+      }
+      minimumAge = parsed;
+    }
+
+    await runInit(process.cwd(), {
+      policyDetails: opts.policyDetails,
+      companyName: opts.companyName,
+      siteUrl: opts.siteUrl,
+      privacyContactEmail: opts.privacyContactEmail,
+      euUkUsers: opts.euUkUsers,
+      californiaUsers: opts.californiaUsers,
+      sellsOrSharesData: opts.sellsOrSharesData,
+      usesDataForAdvertising: opts.usesDataForAdvertising,
+      dataRetentionPolicy: opts.dataRetentionPolicy,
+      accountDeletionInstructions: opts.accountDeletionInstructions,
+      minimumAge,
+      sendsDataToAiServices: opts.sendsDataToAiServices,
+    });
   });
 
 program

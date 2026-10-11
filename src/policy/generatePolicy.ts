@@ -111,7 +111,9 @@ function renderContextSection(config: SrcLawyerConfig | null): string {
   lines.push(`- **Entity location:** ${config.entityLocation ?? "not specified"}`);
   lines.push(`- **Target markets:** ${config.targetMarkets.length > 0 ? config.targetMarkets.join(", ") : "not specified"}`);
   lines.push(`- **Industry:** ${config.industry ?? "not specified"}`);
-  lines.push(`- **Collects children's data:** ${config.collectsChildrensData ? "yes" : "no"}`);
+  lines.push(
+    `- **Collects children's data:** ${config.collectsChildrensData === null || config.collectsChildrensData === undefined ? "not specified" : config.collectsChildrensData ? "yes" : "no"}`
+  );
   return lines.join("\n");
 }
 
@@ -124,6 +126,159 @@ function renderUnsupportedStackWarning(warning: string): string {
 // alone has no other way to know confidence grading or Zod-schema detection didn't run for this scan.
 function renderProtectedLogicWarning(warning: string): string {
   return ["> **WARNING: PROTECTED-LOGIC SERVICE UNAVAILABLE — POLICY MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
+}
+
+function placeholder(label: string): string {
+  return `[TO COMPLETE: ${label}]`;
+}
+
+// The one function permitted to record that a fact was never answered -- every new section below
+// goes through this (directly or via valueOrPlaceholder/triStateSentence) so renderPlaceholderSummary
+// can list everything that's missing in one place, without a second pass over the config.
+function placeholderLine(label: string, placeholders: string[]): string {
+  placeholders.push(label);
+  return placeholder(label);
+}
+
+function valueOrPlaceholder(value: string | null | undefined, label: string, placeholders: string[]): string {
+  if (value === null || value === undefined || value === "") return placeholderLine(label, placeholders);
+  return value;
+}
+
+function triStateSentence(
+  value: boolean | null | undefined,
+  label: string,
+  trueText: string,
+  falseText: string,
+  placeholders: string[]
+): string {
+  if (value === true) return trueText;
+  if (value === false) return falseText;
+  return placeholderLine(label, placeholders);
+}
+
+function renderIdentitySection(config: SrcLawyerConfig | null, placeholders: string[]): string {
+  const companyName = valueOrPlaceholder(config?.companyName, "company or product name", placeholders);
+  const siteUrl = valueOrPlaceholder(config?.siteUrl, "site or app URL", placeholders);
+  const privacyContactEmail = valueOrPlaceholder(config?.privacyContactEmail, "privacy contact email address", placeholders);
+
+  return [
+    "## About This Policy",
+    "",
+    `This policy is issued by ${companyName}.`,
+    `It applies to the product or service available at ${siteUrl}.`,
+    `Questions about this policy or requests regarding your personal data can be sent to ${privacyContactEmail}.`,
+  ].join("\n");
+}
+
+// The sell/share and advertising sentences are the highest-risk new text in this document: the policy
+// can simultaneously list detected third-party integrations (e.g. Stripe) in the Third-Party Data
+// Processors section above. These sentences deliberately (1) use CCPA/CPRA's own defined terms rather
+// than casual language, (2) frame the statement as the user's own self-declared setup answer, not a
+// legal conclusion drawn by this tool, and (3) always close with an explicit cross-reference back to
+// the detected-processors section, in all three states (true/false/placeholder), so the two sections
+// are never read in isolation from each other. See docs/legal-wording-review.md -- this is drafted,
+// attorney-reviewable starting wording, not settled language.
+function renderDataPracticesSection(config: SrcLawyerConfig | null, placeholders: string[]): string {
+  const retention = valueOrPlaceholder(config?.dataRetentionPolicy, "data retention period or policy", placeholders);
+  const deletion = valueOrPlaceholder(
+    config?.accountDeletionInstructions,
+    "how a user can delete their account or request data deletion",
+    placeholders
+  );
+
+  const sellShare = triStateSentence(
+    config?.sellsOrSharesData,
+    'whether personal data is sold or shared with third parties, as "sell" and "share" are defined under applicable law (e.g. CCPA/CPRA)',
+    'Based on information provided during setup, this product has been declared to sell or share personal data with third parties, as "sell" and "share" are defined under applicable law (e.g. CCPA/CPRA).',
+    'Based on information provided during setup, this product has not been declared to sell or share personal data with third parties, as "sell" and "share" are defined under applicable law (e.g. CCPA/CPRA).',
+    placeholders
+  );
+
+  const advertising = triStateSentence(
+    config?.usesDataForAdvertising,
+    "whether personal data is used for cross-context behavioral advertising",
+    "Based on information provided during setup, this product has been declared to use personal data for cross-context behavioral advertising.",
+    "Based on information provided during setup, this product has not been declared to use personal data for cross-context behavioral advertising.",
+    placeholders
+  );
+
+  const aiServices = triStateSentence(
+    config?.sendsDataToAiServices,
+    "whether user data is sent to third-party AI services as part of this product's own functionality",
+    "User data may be sent to third-party AI services as part of this product's own functionality.",
+    "User data is not sent to third-party AI services as part of this product's own functionality.",
+    placeholders
+  );
+
+  return [
+    "## Data Retention, Deletion, and Use",
+    "",
+    `Personal data is retained as follows: ${retention}`,
+    `To delete your account or request deletion of your personal data: ${deletion}`,
+    sellShare,
+    advertising,
+    "See the Third-Party Data Processors section above for the specific third-party integrations detected in this codebase; the declarations above describe this product's own stated practices and do not override what was actually detected there.",
+    aiServices,
+  ].join("\n");
+}
+
+function renderRightsSection(config: SrcLawyerConfig | null, placeholders: string[]): string {
+  const euUk = config?.hasEuUkUsers;
+  const california = config?.hasCaliforniaUsers;
+
+  if (euUk === false && california === false) {
+    return ["## Your Rights", "", "This product has not declared users in jurisdictions with additional statutory privacy rights (EU/UK, California)."].join(
+      "\n"
+    );
+  }
+
+  const lines = ["## Your Rights", ""];
+
+  if (euUk === true) {
+    lines.push(
+      "If you are located in the EU or UK, you may have rights under the GDPR and/or UK GDPR, including the right to access, correct, delete, or restrict the use of your personal data."
+    );
+  } else if (euUk !== false) {
+    lines.push(placeholderLine("whether this product has users in the EU/UK, which determines whether GDPR/UK GDPR disclosures apply", placeholders));
+  }
+
+  if (california === true) {
+    lines.push(
+      "If you are a California resident, you may have rights under the CCPA/CPRA, including the right to know, delete, correct, and opt out of the sale or sharing of your personal data."
+    );
+  } else if (california !== false) {
+    lines.push(placeholderLine("whether this product has users in California, which determines whether CCPA/CPRA disclosures apply", placeholders));
+  }
+
+  return lines.join("\n");
+}
+
+function renderChildrensPrivacySection(config: SrcLawyerConfig | null, placeholders: string[]): string {
+  const collects = config?.collectsChildrensData;
+  const collectsLine = triStateSentence(
+    collects,
+    "whether this product knowingly collects personal data from children",
+    "This product knowingly collects personal data from children under applicable age thresholds (e.g. under 13 in the US, under 16 in the EU where applicable).",
+    "This product does not knowingly collect personal data from children under applicable age thresholds.",
+    placeholders
+  );
+
+  const minimumAge = config?.minimumAge;
+  const ageLine =
+    minimumAge === null || minimumAge === undefined
+      ? placeholderLine("minimum age required to use this product, if any", placeholders)
+      : `Users must be at least ${minimumAge} years old to use this product.`;
+
+  return ["## Children's Privacy", "", collectsLine, ageLine].join("\n");
+}
+
+function renderPlaceholderSummary(labels: string[]): string {
+  const lines = ["## Placeholders — Complete Before Publishing", ""];
+  for (const label of labels) {
+    lines.push(`- ${placeholder(label)}`);
+  }
+  return lines.join("\n");
 }
 
 type FindingOutcome = "confident" | "resolved" | "declined" | "unresolved";
@@ -148,6 +303,14 @@ export function generatePolicyMarkdown(
   const declinedFindings = result.findings.filter((f) => outcomeOf(f) === "declined");
   const reviewFindings = result.findings.filter((f) => outcomeOf(f) === "unresolved");
 
+  // Rendered first (before the final parts[] is assembled) so the shared placeholders array is fully
+  // populated in time for the top-of-document summary below.
+  const placeholders: string[] = [];
+  const identitySection = renderIdentitySection(config, placeholders);
+  const dataPracticesSection = renderDataPracticesSection(config, placeholders);
+  const rightsSection = renderRightsSection(config, placeholders);
+  const childrensPrivacySection = renderChildrensPrivacySection(config, placeholders);
+
   const parts: string[] = ["# Privacy Policy", ""];
 
   if (result.unsupportedStackWarning) {
@@ -162,10 +325,16 @@ export function generatePolicyMarkdown(
     parts.push(renderLlmErrorWarning(llmError), "");
   }
 
+  if (placeholders.length > 0) {
+    parts.push(renderPlaceholderSummary([...new Set(placeholders)]), "");
+  }
+
   parts.push(
     `_Generated by SrcLawyer from static analysis of this codebase (${result.filesScanned} file(s) scanned)._`,
     "",
     renderContextSection(config),
+    "",
+    identitySection,
     "",
     "## Data We Collect",
     ""
@@ -184,6 +353,8 @@ export function generatePolicyMarkdown(
   if (processorSection) {
     parts.push("", processorSection);
   }
+
+  parts.push("", dataPracticesSection, "", rightsSection, "", childrensPrivacySection);
 
   const declinedSection = renderDeclinedSection(declinedFindings);
   if (declinedSection) {

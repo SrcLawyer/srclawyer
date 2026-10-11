@@ -49,6 +49,87 @@ describe("config tier/llm fields", () => {
   });
 });
 
+describe("optional policy-detail fields", () => {
+  it("defaults every new field to null", () => {
+    expect(DEFAULT_CONFIG.companyName).toBeNull();
+    expect(DEFAULT_CONFIG.siteUrl).toBeNull();
+    expect(DEFAULT_CONFIG.privacyContactEmail).toBeNull();
+    expect(DEFAULT_CONFIG.hasEuUkUsers).toBeNull();
+    expect(DEFAULT_CONFIG.hasCaliforniaUsers).toBeNull();
+    expect(DEFAULT_CONFIG.sellsOrSharesData).toBeNull();
+    expect(DEFAULT_CONFIG.usesDataForAdvertising).toBeNull();
+    expect(DEFAULT_CONFIG.dataRetentionPolicy).toBeNull();
+    expect(DEFAULT_CONFIG.accountDeletionInstructions).toBeNull();
+    expect(DEFAULT_CONFIG.minimumAge).toBeNull();
+    expect(DEFAULT_CONFIG.sendsDataToAiServices).toBeNull();
+    expect(DEFAULT_CONFIG.collectsChildrensData).toBeNull();
+  });
+
+  it("round-trips every new field through writeConfig/loadConfig", () => {
+    const dir = tempDir();
+    writeConfig(dir, {
+      ...DEFAULT_CONFIG,
+      companyName: "Acme Inc.",
+      siteUrl: "https://acme.example",
+      privacyContactEmail: "privacy@acme.example",
+      hasEuUkUsers: true,
+      hasCaliforniaUsers: false,
+      sellsOrSharesData: false,
+      usesDataForAdvertising: true,
+      dataRetentionPolicy: "2 years",
+      accountDeletionInstructions: "Email privacy@acme.example",
+      minimumAge: 13,
+      sendsDataToAiServices: false,
+    });
+
+    const loaded = loadConfig(dir);
+    expect(loaded?.companyName).toBe("Acme Inc.");
+    expect(loaded?.siteUrl).toBe("https://acme.example");
+    expect(loaded?.privacyContactEmail).toBe("privacy@acme.example");
+    expect(loaded?.hasEuUkUsers).toBe(true);
+    expect(loaded?.hasCaliforniaUsers).toBe(false);
+    expect(loaded?.sellsOrSharesData).toBe(false);
+    expect(loaded?.usesDataForAdvertising).toBe(true);
+    expect(loaded?.dataRetentionPolicy).toBe("2 years");
+    expect(loaded?.accountDeletionInstructions).toBe("Email privacy@acme.example");
+    expect(loaded?.minimumAge).toBe(13);
+    expect(loaded?.sendsDataToAiServices).toBe(false);
+  });
+
+  it("old config files without any of the new fields still load, defaulting every one to null", () => {
+    const dir = tempDir();
+    writeConfig(dir, {
+      entityLocation: "US",
+      targetMarkets: [],
+      industry: null,
+      collectsChildrensData: false,
+    });
+
+    const loaded = loadConfig(dir);
+    expect(loaded?.companyName).toBeNull();
+    expect(loaded?.hasEuUkUsers).toBeNull();
+    expect(loaded?.minimumAge).toBeNull();
+  });
+
+  it("collectsChildrensData is null (unanswered), not false, when the key is truly absent from the file -- distinct from an explicit 'no'", () => {
+    const dir = tempDir();
+    // Written as raw YAML (not via writeConfig) specifically to omit the key entirely -- the way a
+    // pre-0.6.1 config file, or a hand-edited one, actually looks on disk.
+    writeFileSync(join(dir, CONFIG_FILENAME), "entityLocation: US\ntargetMarkets: []\nindustry: null\n");
+
+    const loaded = loadConfig(dir);
+    expect(loaded?.collectsChildrensData).toBeNull();
+  });
+
+  it("collectsChildrensData round-trips an explicit false distinctly from null", () => {
+    const dir = tempDir();
+    writeConfig(dir, { ...DEFAULT_CONFIG, collectsChildrensData: false });
+
+    const loaded = loadConfig(dir);
+    expect(loaded?.collectsChildrensData).toBe(false);
+  });
+});
+
 describe("legacy config rename safeguard", () => {
   it("is false when neither file exists", () => {
     expect(hasUnmigratedLegacyConfig(tempDir())).toBe(false);
