@@ -22,8 +22,9 @@ These are the highest-risk sentences in the document: the policy can simultaneou
 - **False**: `Based on information provided during setup, this product has not been declared to use personal data for cross-context behavioral advertising.`
 - **Unanswered**: `[TO COMPLETE: whether personal data is used for cross-context behavioral advertising]`
 
-**Closing cross-reference** (always rendered, regardless of either answer's state):
-> `See the Third-Party Data Processors section above for the specific third-party integrations detected in this codebase; the declarations above describe this product's own stated practices and do not override what was actually detected there.`
+**Closing cross-reference** (rendered regardless of either answer's state, with one of two variants depending on whether a `## Third-Party Data Processors` section actually exists elsewhere in the document):
+- **When processors were detected**: `See the Third-Party Data Processors section above for the specific third-party integrations detected in this codebase; the declarations above describe this product's own stated practices and do not override what was actually detected there.`
+- **When no such section exists** (nothing detected, or an unsupported-stack scan where detection was incomplete): `This document does not include a Third-Party Data Processors section (none were detected, or detection may have been incomplete -- see any warning above); the declarations above describe this product's own stated practices only and do not override any third-party integrations this codebase may actually use.`
 
 ---
 

@@ -276,14 +276,53 @@ describe("generatePolicyMarkdown", () => {
   });
 
   describe("Data Retention, Deletion, and Use", () => {
-    it("renders the sell/share sentence true, false, and unanswered, always with the processors cross-reference", () => {
+    it("renders the sell/share sentence true, false, and unanswered, always with a processors cross-reference", () => {
+      const withProcessor = makeScanResult({
+        findings: [makeFinding({ processor: "Stripe", description: "Stripe integration detected. Payment processor." })],
+        filesScanned: 1,
+      });
       for (const value of [true, false, null] as const) {
-        const markdown = generatePolicyMarkdown(makeScanResult({}), makeConfig({ sellsOrSharesData: value }));
+        const markdown = generatePolicyMarkdown(withProcessor, makeConfig({ sellsOrSharesData: value }));
         expect(markdown).toContain("See the Third-Party Data Processors section above");
         if (value === true) expect(markdown).toContain("has been declared to sell or share personal data");
         if (value === false) expect(markdown).toContain("has not been declared to sell or share personal data");
         if (value === null) expect(markdown).toContain("[TO COMPLETE: whether personal data is sold or shared");
       }
+    });
+
+    it("does not reference a missing Third-Party Data Processors section when none were detected", () => {
+      const markdown = generatePolicyMarkdown(makeScanResult({}), makeConfig({ sellsOrSharesData: true }));
+
+      expect(markdown).not.toContain("## Third-Party Data Processors");
+      expect(markdown).not.toContain("See the Third-Party Data Processors section above");
+      expect(markdown).toContain("This document does not include a Third-Party Data Processors section");
+      // Still keeps the point that these are self-declared and don't override actual integrations.
+      expect(markdown).toContain("do not override any third-party integrations this codebase may actually use");
+    });
+
+    it("does not reference a missing Third-Party Data Processors section on an unsupported-stack scan", () => {
+      const markdown = generatePolicyMarkdown(
+        makeScanResult({ unsupportedStackWarning: "UNSUPPORTED CODEBASE — Python detected as the primary language." }),
+        makeConfig({ sellsOrSharesData: true })
+      );
+
+      expect(markdown).not.toContain("## Third-Party Data Processors");
+      expect(markdown).not.toContain("See the Third-Party Data Processors section above");
+      expect(markdown).toContain("This document does not include a Third-Party Data Processors section");
+    });
+
+    it("references the real section when a processor was in fact detected", () => {
+      const markdown = generatePolicyMarkdown(
+        makeScanResult({
+          findings: [makeFinding({ processor: "Stripe", description: "Stripe integration detected. Payment processor." })],
+          filesScanned: 1,
+        }),
+        makeConfig({ sellsOrSharesData: false })
+      );
+
+      expect(markdown).toContain("## Third-Party Data Processors");
+      expect(markdown).toContain("See the Third-Party Data Processors section above");
+      expect(markdown).not.toContain("This document does not include a Third-Party Data Processors section");
     });
 
     it("renders the advertising sentence true, false, and unanswered", () => {

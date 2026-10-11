@@ -184,11 +184,14 @@ function renderIdentitySection(config: SrcLawyerConfig | null, placeholders: str
 // can simultaneously list detected third-party integrations (e.g. Stripe) in the Third-Party Data
 // Processors section above. These sentences deliberately (1) use CCPA/CPRA's own defined terms rather
 // than casual language, (2) frame the statement as the user's own self-declared setup answer, not a
-// legal conclusion drawn by this tool, and (3) always close with an explicit cross-reference back to
-// the detected-processors section, in all three states (true/false/placeholder), so the two sections
-// are never read in isolation from each other. See docs/legal-wording-review.md -- this is drafted,
+// legal conclusion drawn by this tool, and (3) close with a cross-reference back to the
+// detected-processors section, in all three states (true/false/placeholder), so the two sections are
+// never read in isolation from each other -- EXCEPT that the cross-reference only names that section
+// when it actually exists in this document (hasProcessorSection); otherwise it would point at a
+// heading that was never rendered, whether because nothing was detected or because detection itself
+// was incomplete (unsupported stack). See docs/legal-wording-review.md -- this is drafted,
 // attorney-reviewable starting wording, not settled language.
-function renderDataPracticesSection(config: SrcLawyerConfig | null, placeholders: string[]): string {
+function renderDataPracticesSection(config: SrcLawyerConfig | null, placeholders: string[], hasProcessorSection: boolean): string {
   const retention = valueOrPlaceholder(config?.dataRetentionPolicy, "data retention period or policy", placeholders);
   const deletion = valueOrPlaceholder(
     config?.accountDeletionInstructions,
@@ -220,6 +223,10 @@ function renderDataPracticesSection(config: SrcLawyerConfig | null, placeholders
     placeholders
   );
 
+  const processorsCrossReference = hasProcessorSection
+    ? "See the Third-Party Data Processors section above for the specific third-party integrations detected in this codebase; the declarations above describe this product's own stated practices and do not override what was actually detected there."
+    : "This document does not include a Third-Party Data Processors section (none were detected, or detection may have been incomplete -- see any warning above); the declarations above describe this product's own stated practices only and do not override any third-party integrations this codebase may actually use.";
+
   return [
     "## Data Retention, Deletion, and Use",
     "",
@@ -227,7 +234,7 @@ function renderDataPracticesSection(config: SrcLawyerConfig | null, placeholders
     `To delete your account or request deletion of your personal data: ${deletion}`,
     sellShare,
     advertising,
-    "See the Third-Party Data Processors section above for the specific third-party integrations detected in this codebase; the declarations above describe this product's own stated practices and do not override what was actually detected there.",
+    processorsCrossReference,
     aiServices,
   ].join("\n");
 }
@@ -312,11 +319,15 @@ export function generatePolicyMarkdown(
   const declinedFindings = result.findings.filter((f) => outcomeOf(f) === "declined");
   const reviewFindings = result.findings.filter((f) => outcomeOf(f) === "unresolved");
 
-  // Rendered first (before the final parts[] is assembled) so the shared placeholders array is fully
+  // Computed first so renderDataPracticesSection knows whether the Third-Party Data Processors
+  // section (rendered later, below) actually exists in this document before it cross-references it.
+  const processorSection = renderProcessorSection(confidentFindings);
+
+  // Rendered next (before the final parts[] is assembled) so the shared placeholders array is fully
   // populated in time for the top-of-document summary below.
   const placeholders: string[] = [];
   const identitySection = renderIdentitySection(config, placeholders);
-  const dataPracticesSection = renderDataPracticesSection(config, placeholders);
+  const dataPracticesSection = renderDataPracticesSection(config, placeholders, processorSection !== null);
   const rightsSection = renderRightsSection(config, placeholders);
   const childrensPrivacySection = renderChildrensPrivacySection(config, placeholders);
 
@@ -358,7 +369,6 @@ export function generatePolicyMarkdown(
     parts.push("No data-collection patterns were confidently identified in this codebase.");
   }
 
-  const processorSection = renderProcessorSection(confidentFindings);
   if (processorSection) {
     parts.push("", processorSection);
   }
