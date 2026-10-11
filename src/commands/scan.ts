@@ -78,7 +78,7 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   const ambiguousCount = findings.filter((f) => f.requiresReview).length;
   const finalResult = { ...result, findings, ambiguousCount };
   const policyPath = resolve(root, options.out);
-  writeFileSync(policyPath, generatePolicyMarkdown(finalResult, config, llmError));
+  writeFileSync(policyPath, generatePolicyMarkdown(finalResult, config, llmError, protectedLogicWarning));
 
   if (result.unsupportedStackWarning || llmError || protectedLogicWarning || legacyConfigWarning) {
     process.exitCode = 1;

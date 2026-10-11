@@ -119,6 +119,13 @@ function renderUnsupportedStackWarning(warning: string): string {
   return ["> **WARNING: INCOMPLETE SCAN — DO NOT PUBLISH WITHOUT MANUAL REVIEW**", ">", `> ${warning}`].join("\n");
 }
 
+// Mirrors renderUnsupportedStackWarning's own reasoning exactly: this policy FILE gets committed and
+// shared on its own, without the CLI output that already shows this warning -- a reader of the file
+// alone has no other way to know confidence grading or Zod-schema detection didn't run for this scan.
+function renderProtectedLogicWarning(warning: string): string {
+  return ["> **WARNING: PROTECTED-LOGIC SERVICE UNAVAILABLE — POLICY MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
+}
+
 type FindingOutcome = "confident" | "resolved" | "declined" | "unresolved";
 
 function outcomeOf(finding: Finding): FindingOutcome {
@@ -128,7 +135,12 @@ function outcomeOf(finding: Finding): FindingOutcome {
   return "unresolved";
 }
 
-export function generatePolicyMarkdown(result: ScanResult, config: SrcLawyerConfig | null, llmError?: string | null): string {
+export function generatePolicyMarkdown(
+  result: ScanResult,
+  config: SrcLawyerConfig | null,
+  llmError?: string | null,
+  protectedLogicWarning?: string | null
+): string {
   const confidentFindings = result.findings.filter((f) => {
     const outcome = outcomeOf(f);
     return outcome === "confident" || outcome === "resolved";
@@ -140,6 +152,10 @@ export function generatePolicyMarkdown(result: ScanResult, config: SrcLawyerConf
 
   if (result.unsupportedStackWarning) {
     parts.push(renderUnsupportedStackWarning(result.unsupportedStackWarning), "");
+  }
+
+  if (protectedLogicWarning) {
+    parts.push(renderProtectedLogicWarning(protectedLogicWarning), "");
   }
 
   if (llmError) {

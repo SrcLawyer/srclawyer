@@ -103,6 +103,27 @@ describe("generatePolicyMarkdown", () => {
     expect(markdown).toContain("Python detected as the primary language");
   });
 
+  it("prominently surfaces a protected-logic-unavailable warning at the top of the FILE, not just the CLI output -- a policy file gets committed and shared on its own", () => {
+    const result = makeScanResult({});
+    const warning = "Zod-schema detection unavailable (fetch failed) — schemas in this scan were not checked.";
+    const markdown = generatePolicyMarkdown(result, null, null, warning);
+
+    const titleIndex = markdown.indexOf("# Privacy Policy");
+    const warningIndex = markdown.indexOf("WARNING: PROTECTED-LOGIC SERVICE UNAVAILABLE");
+    const scopeIndex = markdown.indexOf("## Scope");
+
+    expect(warningIndex).toBeGreaterThan(titleIndex);
+    expect(warningIndex).toBeLessThan(scopeIndex);
+    expect(markdown).toContain(warning);
+  });
+
+  it("omits the protected-logic warning entirely when nothing failed", () => {
+    const result = makeScanResult({});
+    const markdown = generatePolicyMarkdown(result, null, null, null);
+
+    expect(markdown).not.toContain("PROTECTED-LOGIC SERVICE UNAVAILABLE");
+  });
+
   it("says the codebase wasn't analyzed, not that no data collection was found, when the stack is unsupported and nothing was confidently detected", () => {
     const result = makeScanResult({ unsupportedStackWarning: "UNSUPPORTED CODEBASE — Python detected as the primary language." });
     const markdown = generatePolicyMarkdown(result, null);

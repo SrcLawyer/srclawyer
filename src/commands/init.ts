@@ -60,7 +60,11 @@ export async function runInit(root: string): Promise<void> {
   const targetMarketsRaw = await ask(lines, "Which regions/markets do you serve? (comma-separated, e.g. US, EU)", "");
   const industry = await ask(lines, "What industry/vertical is this product in?", guessedIndustry ?? "");
   const childrensDataRaw = await ask(lines, "Does this product knowingly collect data from children under 13/16?", "no");
-  const tierRaw = await ask(lines, "Tier: free (static analysis only) / byok (bring your own Anthropic key) / managed (not yet available)", "free");
+  // "managed" is deliberately not offered here -- it's a real SrcLawyerTier value and config.ts/
+  // resolveProviderForTier.ts both still support it fully (a hand-edited config with tier: managed
+  // still gets a clear, accurate error at scan time), but there's no advertised path to it from this
+  // prompt, so a tester reading the choices here can't select a dead end during setup.
+  const tierRaw = await ask(lines, "Tier: free (static analysis only) / byok (bring your own Anthropic key)", "free");
 
   const tier = normalizeTier(tierRaw);
   let apiKeyEnvVar: string | null = null;

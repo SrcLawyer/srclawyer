@@ -2,6 +2,10 @@
 // "Legal" section that covers the same ground today (not a placeholder or a dead `.invalid` link), and
 // should be repointed to a real site once one exists. Kept as named constants precisely so there's one
 // place to update when that happens -- a one-line change, not a hunt through every call site.
+//
+// Deliberately NOT labeled "Privacy policy:" / "Terms:" below: that would claim those documents exist
+// at this URL, when the Legal section itself says plainly that they don't yet -- this points at a
+// notice and disclaimer, not a substitute for either.
 export const PRIVACY_POLICY_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 export const TERMS_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 
@@ -16,8 +20,8 @@ export const NETWORK_CALLS_NOTICE = [
   "schemas as request validators, one additional call sending a small redacted code fragment. This runs",
   "on every scan regardless of tier.",
   "",
-  `Privacy policy: ${PRIVACY_POLICY_URL}`,
-  `Terms: ${TERMS_URL}`,
+  `Legal notice and disclaimer: ${PRIVACY_POLICY_URL}`,
+  "(A dedicated privacy policy and terms of service are coming; this points to what exists today.)",
 ].join("\n");
 
 export const SCAN_DISCLAIMER_REMINDER =
