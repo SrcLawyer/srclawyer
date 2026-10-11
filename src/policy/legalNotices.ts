@@ -1,9 +1,9 @@
 // No dedicated privacy-policy/terms site exists yet -- these point at the real, resolvable README
-// sections that cover the same ground today (not a placeholder or a dead `.invalid` link), and should
-// be repointed to a real site once one exists. Kept as named constants precisely so there's one place
-// to update when that happens.
-export const PRIVACY_POLICY_URL = "https://github.com/SrcLawyer/srclawyer#network-calls";
-export const TERMS_URL = "https://github.com/SrcLawyer/srclawyer#readme";
+// "Legal" section that covers the same ground today (not a placeholder or a dead `.invalid` link), and
+// should be repointed to a real site once one exists. Kept as named constants precisely so there's one
+// place to update when that happens -- a one-line change, not a hunt through every call site.
+export const PRIVACY_POLICY_URL = "https://github.com/SrcLawyer/srclawyer#legal";
+export const TERMS_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 
 // Verbatim from README.md's own "Network calls" section (minus markdown backticks, since this prints
 // to a terminal) -- one wording for this claim, not a second paraphrase that can drift from the first.

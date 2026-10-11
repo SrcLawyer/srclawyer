@@ -2,9 +2,9 @@
 
 Static analysis engine that derives privacy policy documentation directly from source code, and keeps it in sync as the code changes.
 
-> This is a Phase 1 scaffold: the CLI (`init`, `scan`), the Layer 1 static analysis engine — SDK/framework pattern detection, HTML/browser-API detection, and OpenAPI/GraphQL schema parsing — LLM-assisted reasoning for ambiguous findings (Layer 2, bring-your-own-key or managed), and markdown privacy policy generation. CI/CD integration is not yet implemented.
+> **Beta.** The CLI (`init`, `scan`), the Layer 1 static analysis engine, and markdown privacy policy generation all work today. JavaScript/TypeScript (Express, Next.js) is the most tested path; Python (Flask) is newer, with FastAPI and Django explicitly detected and flagged as unsupported rather than silently skipped — see [Supported languages and frameworks](#supported-languages-and-frameworks) and [Known gaps](#known-gaps) below. LLM-assisted reasoning for ambiguous findings (Layer 2) is available now under the bring-your-own-key tier, documented below as one optional step in `init` — a managed (hosted) tier is planned but not yet available.
 >
-> Scanning is manual-only (`srclawyer scan`, run on demand) — this is the free/solo tier's permanent behavior, not a placeholder. CI/CD integration (PR-triggered scans, a weekly backstop scan) is scoped for the paid/team tier only; see `PRODUCT_SPEC.md` Section 8.5.
+> Scanning is manual-only (`srclawyer scan`, run on demand) — this is the free/solo tier's permanent behavior, not a placeholder. Automatic CI/CD updating (a scan that runs itself on every PR, or on a schedule) isn't available yet; it's scoped for a future paid/team tier. See `PRODUCT_SPEC.md` Section 8.5 for the plan.
 
 ## Usage
 
@@ -106,6 +106,12 @@ Detection itself is fully local and offline — no code leaves your machine for 
 ## Accuracy corpus
 
 `npm test` never touches the network. A separate, real-world accuracy check lives in `test-fixtures/golden-corpus/` — see its own README for what it measures and why it's not part of the default test run.
+
+## Legal
+
+SrcLawyer generates a *starting draft*, not a substitute for legal review — every generated policy carries that disclaimer (`src/policy/disclaimer.ts`), and `scan` repeats a short reminder of it at the end of its own output.
+
+A dedicated privacy policy and terms of service **for SrcLawyer itself** (the tool, not the policy it writes for your project) don't exist yet. Until they do, this README is the authoritative reference for what this tool sends over the network and to whom — see [Network calls](#network-calls) above — and for how it's licensed — see [License](#license) below.
 
 ## License
 

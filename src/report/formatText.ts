@@ -47,7 +47,9 @@ export function formatText(result: ScanResult): string {
     lines.push(`AI-assisted resolution: ${resolvedCount} resolved, ${declinedCount} declined (with a reason), ${stillUnresolvedCount} still unresolved.`);
   } else if (result.ambiguousCount > 0) {
     lines.push("");
-    lines.push(`${result.ambiguousCount} item(s) require deeper analysis before they can be included in a policy. Run "srclawyer scan" with a "byok"/"managed" tier configured to attempt AI-assisted resolution, or resolve manually.`);
+    lines.push(
+      `${result.ambiguousCount} item(s) require deeper analysis before they can be included in a policy. Run "srclawyer scan" with the "byok" tier configured (bring your own Anthropic key) to attempt AI-assisted resolution, or resolve manually. A "managed" tier is planned but not yet available.`
+    );
   }
 
   return lines.join("\n");
