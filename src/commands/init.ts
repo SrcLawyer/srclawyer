@@ -12,6 +12,7 @@ import {
   type SrcLawyerTier,
 } from "../config/config.js";
 import { NETWORK_CALLS_NOTICE } from "../policy/legalNotices.js";
+import { runScan } from "./scan.js";
 
 export interface InitFlags {
   policyDetails?: boolean;
@@ -115,7 +116,7 @@ function warnIfContradictsTargetMarkets(label: string, finalValue: boolean | nul
 export async function runInit(root: string, flags: InitFlags = {}): Promise<void> {
   const existingPath = configPath(root);
   if (existsSync(existingPath)) {
-    console.log(`${CONFIG_FILENAME} already exists. Delete it first if you want to redo setup.`);
+    console.log(`${CONFIG_FILENAME} already exists -- left unchanged. To start over, delete it and re-run "srclawyer init":\n\n  rm ${CONFIG_FILENAME}\n  srclawyer init\n`);
     return;
   }
 
@@ -123,6 +124,12 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
     console.log(legacyConfigMessage());
     return;
   }
+
+  // The final "run a scan now?" prompt below is interactive-only: skipped whenever this run is
+  // flag-driven (any flag was passed -- a scripted/CI invocation, even a partial one) or stdin isn't
+  // a real TTY (piped, redirected, non-interactive). Computed once, up front, rather than re-checked
+  // at the end, since nothing between here and there changes either condition.
+  const isInteractive = process.stdin.isTTY === true && Object.values(flags).every((v) => v === undefined);
 
   const guessedIndustry = guessIndustry(root);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -199,8 +206,6 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
     console.log(`\nNote: only the name "${apiKeyEnvVar}" is written to ${CONFIG_FILENAME} — the key itself is never written to disk. It's read from your environment at scan time.`);
   }
 
-  rl.close();
-
   const config: SrcLawyerConfig = {
     entityLocation: entityLocation || null,
     targetMarkets,
@@ -223,4 +228,17 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
 
   writeConfig(root, config);
   console.log(`\nWrote ${CONFIG_FILENAME}. Run "srclawyer scan" to analyze this codebase.`);
+
+  let runScanNow = false;
+  if (isInteractive) {
+    const raw = await ask(lines, "Run a scan now and generate your policy?", "y");
+    runScanNow = /^y(es)?$/i.test(raw.trim());
+  }
+
+  rl.close();
+
+  if (runScanNow) {
+    console.log("");
+    await runScan(root, { json: false, out: "PRIVACY_POLICY.md", llm: true });
+  }
 }
