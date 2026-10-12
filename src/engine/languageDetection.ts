@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import fg from "fast-glob";
+import { globFiles } from "./globFiles.js";
 
 const IGNORE = ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**", "**/vendor/**", "**/venv/**", "**/.venv/**", "**/__pycache__/**"];
 
@@ -34,7 +34,7 @@ async function detectFrameworkSignature(root: string): Promise<string | null> {
     return bannerize("Rails detected (Gemfile + a Rails app/config layout found).");
   }
 
-  const protoFiles = await fg("**/*.proto", { cwd: root, ignore: IGNORE, dot: false });
+  const protoFiles = await globFiles("**/*.proto", { cwd: root, ignore: IGNORE, dot: false });
   if (protoFiles.length > 0) {
     return bannerize(`gRPC/Protocol Buffers detected (${protoFiles.length} .proto file(s) found) — protobuf schemas are not parsed.`);
   }
@@ -65,8 +65,8 @@ async function detectUnsupportedPythonFramework(root: string, pythonFiles: strin
 
 async function detectDominantUnsupportedLanguage(root: string): Promise<string | null> {
   const [supportedFiles, ...unsupportedGroups] = await Promise.all([
-    fg(SUPPORTED_EXTENSIONS.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false }),
-    ...UNSUPPORTED_LANGUAGES.map((lang) => fg(lang.extensions.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false })),
+    globFiles(SUPPORTED_EXTENSIONS.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false }),
+    ...UNSUPPORTED_LANGUAGES.map((lang) => globFiles(lang.extensions.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false })),
   ]);
 
   const counts = UNSUPPORTED_LANGUAGES.map((lang, i) => ({ label: lang.label, count: unsupportedGroups[i].length }));
@@ -81,7 +81,7 @@ export async function detectUnsupportedStack(root: string): Promise<string | nul
   const frameworkWarning = await detectFrameworkSignature(root);
   if (frameworkWarning) return frameworkWarning;
 
-  const pythonFiles = await fg("**/*.py", { cwd: root, absolute: true, ignore: IGNORE, dot: false });
+  const pythonFiles = await globFiles("**/*.py", { cwd: root, absolute: true, ignore: IGNORE, dot: false });
   if (pythonFiles.length > 0) {
     const pythonFrameworkWarning = await detectUnsupportedPythonFramework(root, pythonFiles);
     if (pythonFrameworkWarning) return pythonFrameworkWarning;

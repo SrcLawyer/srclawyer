@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
-import fg from "fast-glob";
+import { globFiles } from "./globFiles.js";
 import type { ProjectManifest } from "./types.js";
 import { validateWorkspacePatterns } from "./workspacePatterns.js";
 
@@ -38,7 +38,7 @@ function rawWorkspaces(pkg: unknown): unknown {
 }
 
 async function globManifests(patterns: string[], root: string): Promise<string[]> {
-  return fg(
+  return globFiles(
     patterns.map((p) => (p.startsWith("!") ? `!${join(p.slice(1), "package.json")}` : join(p, "package.json"))),
     { cwd: root, absolute: true, ignore: ["**/node_modules/**"] }
   );
