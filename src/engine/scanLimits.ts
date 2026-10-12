@@ -46,7 +46,8 @@ export function containsTemplateSyntax(code: string): boolean {
 export function summarizeTemplateScripts(skipped: SkippedFile[]): string | null {
   const total = skipped.filter((s) => s.reason === "template-syntax").reduce((n, s) => n + (s.scripts ?? 0), 0);
   if (total === 0) return null;
-  return `${total} inline scripts in template files were not analyzed (listed in --json output).`;
+  const subject = total === 1 ? "1 inline script in template files was" : `${total} inline scripts in template files were`;
+  return `${subject} not analyzed (listed in --json output).`;
 }
 
 const REASON_LABELS: Record<SkipReason, string> = {

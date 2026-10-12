@@ -32,7 +32,15 @@ describe("inline scripts with template syntax", () => {
 
     expect(result.skippedFiles).toEqual([{ file: "page.html", reason: "template-syntax", scripts: 1 }]);
     expect(result.skippedFilesWarning).toBeNull();
-    expect(result.templateSyntaxNote).toBe("1 inline scripts in template files were not analyzed (listed in --json output).");
+    expect(result.templateSyntaxNote).toBe("1 inline script in template files was not analyzed (listed in --json output).");
+  });
+
+  it("pluralizes the note: '1 inline script … was' versus 'N inline scripts … were'", async () => {
+    const one = await scan(makeRepo({ "a.html": "<script>var a = {{ x }};</script>\n" }));
+    expect(one.templateSyntaxNote).toBe("1 inline script in template files was not analyzed (listed in --json output).");
+
+    const two = await scan(makeRepo({ "a.html": "<script>var a = {{ x }};</script>\n<script>var b = {% y %};</script>\n" }));
+    expect(two.templateSyntaxNote).toBe("2 inline scripts in template files were not analyzed (listed in --json output).");
   });
 
   it("counts scripts across files and keeps the HTML rules running on the rest of the file", async () => {
@@ -115,9 +123,9 @@ describe("template-syntax is informational: no banner, no exit 1 on its own", ()
     await runScan(root, { json: false, out: "PRIVACY_POLICY.md", llm: false });
 
     const stderr = err.mock.calls.map((c) => String(c[0]));
-    expect(stderr.filter((l) => l.includes("inline scripts in template files were not analyzed"))).toHaveLength(1);
+    expect(stderr.filter((l) => l.includes("in template files was not analyzed"))).toHaveLength(1);
     const stdout = log.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(stdout).toContain("Note: 1 inline scripts in template files were not analyzed");
+    expect(stdout).toContain("Note: 1 inline script in template files was not analyzed");
     expect(stdout).not.toContain("WARNING");
     const policy = readFileSync(join(root, "PRIVACY_POLICY.md"), "utf8");
     expect(policy).not.toContain("FILES SKIPPED");
@@ -135,7 +143,7 @@ describe("template-syntax is informational: no banner, no exit 1 on its own", ()
     const json = JSON.parse(String(log.mock.calls.find((c) => String(c[0]).trim().startsWith("{"))![0]));
     expect(json.skippedFiles).toEqual([{ file: "base.html", reason: "template-syntax", scripts: 1 }]);
     expect(json.skippedFilesWarning).toBeNull();
-    expect(json.templateSyntaxNote).toContain("1 inline scripts");
+    expect(json.templateSyntaxNote).toContain("1 inline script in template files was not analyzed");
     expect(process.exitCode ?? 0).toBe(0);
   });
 
@@ -143,7 +151,7 @@ describe("template-syntax is informational: no banner, no exit 1 on its own", ()
     const result = await scan(makeRepo({ "base.html": JINJA_PAGE }));
     const text = formatText(result);
 
-    expect(text).toContain("Note: 1 inline scripts in template files were not analyzed");
+    expect(text).toContain("Note: 1 inline script in template files was not analyzed");
     expect(text).not.toContain("WARNING");
   });
 
