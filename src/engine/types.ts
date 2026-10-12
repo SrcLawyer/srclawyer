@@ -87,10 +87,22 @@ export interface ScanResult {
    *  partially scanned -- the complete list, including everything the one-line warning below elides. */
   skippedFiles: Array<{
     file: string;
-    reason: "oversized" | "inline-scripts-truncated" | "symlink-outside-root" | "unreadable" | "parse-failed" | "analysis-failed";
+    reason:
+      | "oversized"
+      | "inline-scripts-truncated"
+      | "symlink-outside-root"
+      | "unreadable"
+      | "parse-failed"
+      | "analysis-failed"
+      | "template-syntax";
+    /** "template-syntax" only: inline scripts in the file that were not analyzed. */
+    scripts?: number;
   }>;
   /** One summarized line naming a few of skippedFiles; null when nothing was skipped. */
   skippedFilesWarning: string | null;
+  /** One informational line when inline scripts carrying template syntax ({{, {%, <%, {#) were not
+   *  analyzed; deliberately NOT part of skippedFilesWarning -- no banner, no non-zero exit. */
+  templateSyntaxNote: string | null;
   /**
    * Files that look like they might define a Zod schema used to validate incoming request data —
    * unconfirmed, since the actual schema/anchor detection is protected logic and runs server-side.

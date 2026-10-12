@@ -14,7 +14,14 @@ import { runPythonFrameworkRules } from "../rules/pythonFrameworkRules.js";
 import { findZodCandidates, type ZodCandidate } from "../rules/zodPreFilter.js";
 import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
 import { runHtmlInputRules, extractInlineScriptsBounded } from "../rules/htmlRules.js";
-import { isOversizedFile, summarizeSkippedFiles, type SkipReason, type SkippedFile } from "./scanLimits.js";
+import {
+  containsTemplateSyntax,
+  isOversizedFile,
+  summarizeSkippedFiles,
+  summarizeTemplateScripts,
+  type SkipReason,
+  type SkippedFile,
+} from "./scanLimits.js";
 import { RootBoundary } from "./rootBoundary.js";
 import { parseOpenApiSpec } from "../schemaParsers/openapi.js";
 import { parseGraphQLSchema } from "../schemaParsers/graphql.js";
@@ -237,11 +244,14 @@ export async function scan(root: string): Promise<ScanResult> {
       recordSkip(filePath, "analysis-failed");
     }
     if (extraction.skippedCount > 0) recordSkip(filePath, "inline-scripts-truncated");
+    let templateScripts = 0;
     for (const script of extraction.scripts) {
       const result = runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates, oversizedZodFiles);
       findings.push(...result.findings);
-      if (result.failure) recordSkip(filePath, result.failure);
+      if (result.failure === "parse-failed" && containsTemplateSyntax(script.code)) templateScripts += 1;
+      else if (result.failure) recordSkip(filePath, result.failure);
     }
+    if (templateScripts > 0) skippedFiles.push({ file: relative(root, filePath), reason: "template-syntax", scripts: templateScripts });
   }
 
   for (const filePath of allSchemaFiles) {
@@ -280,6 +290,7 @@ export async function scan(root: string): Promise<ScanResult> {
     workspaceWarning,
     skippedFiles,
     skippedFilesWarning: summarizeSkippedFiles(skippedFiles),
+    templateSyntaxNote: summarizeTemplateScripts(skippedFiles),
     pendingZodCandidates,
     oversizedZodFiles,
     maxZodFragmentBytes,

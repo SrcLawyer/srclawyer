@@ -72,7 +72,7 @@ describe("per-file containment", () => {
   });
 
   it("an HTML file whose inline script can't be parsed keeps its input findings and is recorded", async () => {
-    const root = makeRepo({ "page.html": '<input type="email" name="e">\n<script>\nvar a = {{ not_js }};\n</script>\n' });
+    const root = makeRepo({ "page.html": '<input type="email" name="e">\n<script>\nvar a = ;\n</script>\n' });
 
     const result = await scan(root);
 

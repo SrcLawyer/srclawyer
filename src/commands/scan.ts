@@ -35,6 +35,7 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
 
   if (result.workspaceWarning) console.error(result.workspaceWarning);
   if (result.skippedFilesWarning) console.error(result.skippedFilesWarning);
+  if (result.templateSyntaxNote) console.error(result.templateSyntaxNote);
 
   if (result.maxZodFragmentBytes > 0) {
     console.error(`Largest Zod-schema fragment this scan: ${result.maxZodFragmentBytes} bytes (hard ceiling: ${MAX_FRAGMENT_BYTES} bytes).`);

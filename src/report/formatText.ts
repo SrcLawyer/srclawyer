@@ -30,6 +30,7 @@ export function formatText(result: ScanResult): string {
   }
 
   lines.push(`Scanned ${result.filesScanned} file(s) across ${result.projects.length} project(s).`);
+  if (result.templateSyntaxNote) lines.push(`Note: ${result.templateSyntaxNote}`);
   lines.push(`Found ${result.findings.length} finding(s), ${result.ambiguousCount} requiring review.`);
   lines.push("");
 
