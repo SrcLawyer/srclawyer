@@ -13,6 +13,14 @@ export function formatText(result: ScanResult): string {
     lines.push("");
   }
 
+  if (result.workspaceWarning) {
+    lines.push(BANNER_RULE);
+    lines.push("WARNING:");
+    lines.push(result.workspaceWarning);
+    lines.push(BANNER_RULE);
+    lines.push("");
+  }
+
   lines.push(`Scanned ${result.filesScanned} file(s) across ${result.projects.length} project(s).`);
   lines.push(`Found ${result.findings.length} finding(s), ${result.ambiguousCount} requiring review.`);
   lines.push("");

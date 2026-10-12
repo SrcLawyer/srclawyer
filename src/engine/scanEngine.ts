@@ -79,7 +79,7 @@ async function runPythonCodeRules(filePath: string, source: string, root: string
  * reading this file alone.
  */
 export async function scan(root: string): Promise<ScanResult> {
-  const [projects, unsupportedStackWarning] = await Promise.all([discoverProjects(root), detectUnsupportedStack(root)]);
+  const [{ projects, workspaceWarning }, unsupportedStackWarning] = await Promise.all([discoverProjects(root), detectUnsupportedStack(root)]);
   const findings: Finding[] = [];
   const pendingZodCandidates: ZodCandidate[] = [];
   const oversizedZodFiles: string[] = [];
@@ -177,6 +177,7 @@ export async function scan(root: string): Promise<ScanResult> {
     ambiguousCount,
     filesScanned,
     unsupportedStackWarning,
+    workspaceWarning,
     pendingZodCandidates,
     oversizedZodFiles,
     maxZodFragmentBytes,

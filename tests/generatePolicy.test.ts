@@ -454,3 +454,19 @@ describe("generatePolicyMarkdown", () => {
     });
   });
 });
+
+describe("generatePolicyMarkdown: workspace warning banner", () => {
+  it("shows a banner at the top of the FILE when the workspace config was rejected", () => {
+    const warning = "Workspace configuration in package.json was rejected (an entry is not a string); the default package locations (packages/*, apps/*) were scanned instead, so this scan may be incomplete.";
+    const markdown = generatePolicyMarkdown(makeScanResult({ workspaceWarning: warning }), null);
+
+    const bannerIndex = markdown.indexOf("WARNING: WORKSPACE CONFIGURATION REJECTED");
+    expect(bannerIndex).toBeGreaterThan(markdown.indexOf("# Privacy Policy"));
+    expect(bannerIndex).toBeLessThan(markdown.indexOf("## Scope"));
+    expect(markdown).toContain("default package locations");
+  });
+
+  it("omits the banner when nothing was rejected", () => {
+    expect(generatePolicyMarkdown(makeScanResult({ workspaceWarning: null }), null)).not.toContain("WORKSPACE CONFIGURATION REJECTED");
+  });
+});

@@ -33,6 +33,8 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   const result = await scan(root);
   let findings: Finding[] = result.findings;
 
+  if (result.workspaceWarning) console.error(result.workspaceWarning);
+
   if (result.maxZodFragmentBytes > 0) {
     console.error(`Largest Zod-schema fragment this scan: ${result.maxZodFragmentBytes} bytes (hard ceiling: ${MAX_FRAGMENT_BYTES} bytes).`);
   }
@@ -84,7 +86,7 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   const policyPath = resolve(root, options.out);
   writeFileSync(policyPath, generatePolicyMarkdown(finalResult, config, llmError, protectedLogicWarning));
 
-  if (result.unsupportedStackWarning || llmError || protectedLogicWarning || legacyConfigWarning) {
+  if (result.unsupportedStackWarning || result.workspaceWarning || llmError || protectedLogicWarning || legacyConfigWarning) {
     process.exitCode = 1;
   }
 

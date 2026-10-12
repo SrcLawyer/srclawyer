@@ -80,6 +80,9 @@ export interface ScanResult {
   ambiguousCount: number;
   filesScanned: number;
   unsupportedStackWarning: string | null;
+  /** Non-null when the scanned repo's workspace config was rejected and the default package
+   *  locations were scanned instead (see discoverProjects.ts) -- the scan may be incomplete. */
+  workspaceWarning: string | null;
   /**
    * Files that look like they might define a Zod schema used to validate incoming request data —
    * unconfirmed, since the actual schema/anchor detection is protected logic and runs server-side.

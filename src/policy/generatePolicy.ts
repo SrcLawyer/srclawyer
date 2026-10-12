@@ -128,6 +128,13 @@ function renderProtectedLogicWarning(warning: string): string {
   return ["> **WARNING: PROTECTED-LOGIC SERVICE UNAVAILABLE — POLICY MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
 }
 
+// Same reasoning as the other warning banners: the policy file is committed and shared without the
+// console output, and a rejected workspace config means packages outside the default locations were
+// never scanned.
+function renderWorkspaceWarning(warning: string): string {
+  return ["> **WARNING: WORKSPACE CONFIGURATION REJECTED — SCAN MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
+}
+
 function placeholder(label: string): string {
   return `[TO COMPLETE: ${label}]`;
 }
@@ -335,6 +342,10 @@ export function generatePolicyMarkdown(
 
   if (result.unsupportedStackWarning) {
     parts.push(renderUnsupportedStackWarning(result.unsupportedStackWarning), "");
+  }
+
+  if (result.workspaceWarning) {
+    parts.push(renderWorkspaceWarning(result.workspaceWarning), "");
   }
 
   if (protectedLogicWarning) {
