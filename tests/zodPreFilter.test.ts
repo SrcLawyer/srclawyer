@@ -166,3 +166,32 @@ describe("findZodCandidates", () => {
     });
   });
 });
+
+describe("findZodCandidates: imports whose local names contain regex-special characters", () => {
+  it("includes an import named with a leading $ when the fragment references it", () => {
+    const source = [
+      `import { z } from "zod";`,
+      `import { $schemaId } from "./ids";`,
+      `import { other$ } from "./other";`,
+      `const schema = z.object({ id: $schemaId, email: z.string() });`,
+      `schema.parse(req.body);`,
+    ].join("\n");
+    const { candidates } = findZodCandidates(source, "/root/actions.ts", "/root");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].codeFragment).toContain(`import { $schemaId } from "./ids"`);
+    expect(candidates[0].codeFragment).not.toContain("other$");
+  });
+
+  it("does not treat a name that merely contains the import's name as a use of it", () => {
+    const source = [
+      `import { z } from "zod";`,
+      `import { id } from "./ids";`,
+      `const schema = z.object({ userid: z.string(), email: z.string() });`,
+      `schema.parse(req.body);`,
+    ].join("\n");
+    const { candidates } = findZodCandidates(source, "/root/actions.ts", "/root");
+
+    expect(candidates[0].codeFragment).not.toContain(`from "./ids"`);
+  });
+});

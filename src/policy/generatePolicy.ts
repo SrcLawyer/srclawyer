@@ -135,6 +135,12 @@ function renderWorkspaceWarning(warning: string): string {
   return ["> **WARNING: WORKSPACE CONFIGURATION REJECTED — SCAN MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
 }
 
+// Same reasoning as the other banners: files skipped for size mean findings in them are missing from
+// a policy file that will be committed and shared without the console output.
+function renderSkippedFilesWarning(warning: string): string {
+  return ["> **WARNING: FILES SKIPPED — SCAN INCOMPLETE**", ">", `> ${warning}`].join("\n");
+}
+
 function placeholder(label: string): string {
   return `[TO COMPLETE: ${label}]`;
 }
@@ -346,6 +352,10 @@ export function generatePolicyMarkdown(
 
   if (result.workspaceWarning) {
     parts.push(renderWorkspaceWarning(result.workspaceWarning), "");
+  }
+
+  if (result.skippedFilesWarning) {
+    parts.push(renderSkippedFilesWarning(result.skippedFilesWarning), "");
   }
 
   if (protectedLogicWarning) {

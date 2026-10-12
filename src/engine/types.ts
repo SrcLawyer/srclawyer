@@ -83,6 +83,11 @@ export interface ScanResult {
   /** Non-null when the scanned repo's workspace config was rejected and the default package
    *  locations were scanned instead (see discoverProjects.ts) -- the scan may be incomplete. */
   workspaceWarning: string | null;
+  /** Every file skipped for exceeding the shared size cap, or only partially scanned (too many inline
+   *  scripts) -- the complete list, including everything the one-line warning below elides. */
+  skippedFiles: Array<{ file: string; reason: "oversized" | "inline-scripts-truncated" }>;
+  /** One summarized line naming a few of skippedFiles; null when nothing was skipped. */
+  skippedFilesWarning: string | null;
   /**
    * Files that look like they might define a Zod schema used to validate incoming request data —
    * unconfirmed, since the actual schema/anchor detection is protected logic and runs server-side.

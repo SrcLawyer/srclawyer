@@ -124,6 +124,17 @@ function findElidableInnerLines(file: import("@babel/types").Node, rootRange: [n
   return elidable;
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Whole-identifier match with explicit identifier-character boundaries, not `\b${name}\b`: `$` is a
+// legal identifier character but a regex anchor, and `\b` doesn't treat it as a word character, so the
+// old form silently never matched an import named like `$schema` and dropped it from the fragment.
+function mentionsIdentifier(text: string, name: string): boolean {
+  return new RegExp(`(?<![\\w$])${escapeRegExp(name)}(?![\\w$])`).test(text);
+}
+
 function importedLocalNames(decl: ImportDeclaration): string[] {
   return decl.specifiers.map((spec) => spec.local.name);
 }
@@ -195,7 +206,7 @@ export function findZodCandidates(source: string, filePath: string, root: string
   const coreText = coreIndexes.map((i) => lines[i]).join("\n");
   for (const stmt of body) {
     if (stmt.type !== "ImportDeclaration") continue;
-    const referenced = importedLocalNames(stmt).some((name) => new RegExp(`\\b${name}\\b`).test(coreText));
+    const referenced = importedLocalNames(stmt).some((name) => mentionsIdentifier(coreText, name));
     if (referenced) includeRange(lineRange(stmt));
   }
 

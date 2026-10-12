@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { extname } from "node:path";
+import { extname, relative } from "node:path";
 import { discoverProjects } from "./discoverProjects.js";
 import { discoverFiles } from "./discoverFiles.js";
 import { detectUnsupportedStack } from "./languageDetection.js";
@@ -13,7 +13,8 @@ import { runPythonSdkRules } from "../rules/pythonSdkRules.js";
 import { runPythonFrameworkRules } from "../rules/pythonFrameworkRules.js";
 import { findZodCandidates, type ZodCandidate } from "../rules/zodPreFilter.js";
 import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
-import { runHtmlInputRules, extractInlineScripts } from "../rules/htmlRules.js";
+import { runHtmlInputRules, extractInlineScriptsBounded } from "../rules/htmlRules.js";
+import { isOversizedFile, summarizeSkippedFiles, type SkippedFile } from "./scanLimits.js";
 import { parseOpenApiSpec } from "../schemaParsers/openapi.js";
 import { parseGraphQLSchema } from "../schemaParsers/graphql.js";
 import type { Finding, ScanResult } from "./types.js";
@@ -83,7 +84,16 @@ export async function scan(root: string): Promise<ScanResult> {
   const findings: Finding[] = [];
   const pendingZodCandidates: ZodCandidate[] = [];
   const oversizedZodFiles: string[] = [];
+  const skippedFiles: SkippedFile[] = [];
   let filesScanned = 0;
+
+  // One cap for every scanned file type; a skipped file is recorded (and surfaced as a warning), never
+  // silently dropped.
+  const skipIfOversized = (filePath: string): boolean => {
+    if (!isOversizedFile(filePath)) return false;
+    skippedFiles.push({ file: relative(root, filePath), reason: "oversized" });
+    return true;
+  };
 
   const projectRootList = [...new Set(projects.map((p) => p.root))];
   const fileSets = await Promise.all(projectRootList.map((projectRoot) => discoverFiles(projectRoot)));
@@ -110,6 +120,7 @@ export async function scan(root: string): Promise<ScanResult> {
   const noTsProject = () => null;
 
   for (const filePath of allCodeFiles) {
+    if (skipIfOversized(filePath)) continue;
     filesScanned += 1;
     let source: string;
     try {
@@ -123,6 +134,7 @@ export async function scan(root: string): Promise<ScanResult> {
   }
 
   for (const filePath of allPythonFiles) {
+    if (skipIfOversized(filePath)) continue;
     filesScanned += 1;
     let source: string;
     try {
@@ -135,6 +147,7 @@ export async function scan(root: string): Promise<ScanResult> {
   }
 
   for (const filePath of allHtmlFiles) {
+    if (skipIfOversized(filePath)) continue;
     filesScanned += 1;
     let html: string;
     try {
@@ -144,12 +157,15 @@ export async function scan(root: string): Promise<ScanResult> {
     }
 
     findings.push(...runHtmlInputRules(html, filePath, root));
-    for (const script of extractInlineScripts(html)) {
+    const { scripts, skippedCount } = extractInlineScriptsBounded(html);
+    if (skippedCount > 0) skippedFiles.push({ file: relative(root, filePath), reason: "inline-scripts-truncated" });
+    for (const script of scripts) {
       findings.push(...runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates, oversizedZodFiles));
     }
   }
 
   for (const filePath of allSchemaFiles) {
+    if (skipIfOversized(filePath)) continue;
     filesScanned += 1;
     if (OPENAPI_NAME.test(filePath)) {
       try {
@@ -178,6 +194,8 @@ export async function scan(root: string): Promise<ScanResult> {
     filesScanned,
     unsupportedStackWarning,
     workspaceWarning,
+    skippedFiles,
+    skippedFilesWarning: summarizeSkippedFiles(skippedFiles),
     pendingZodCandidates,
     oversizedZodFiles,
     maxZodFragmentBytes,

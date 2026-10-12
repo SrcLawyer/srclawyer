@@ -470,3 +470,17 @@ describe("generatePolicyMarkdown: workspace warning banner", () => {
     expect(generatePolicyMarkdown(makeScanResult({ workspaceWarning: null }), null)).not.toContain("WORKSPACE CONFIGURATION REJECTED");
   });
 });
+
+describe("generatePolicyMarkdown: skipped-files banner", () => {
+  it("shows a banner at the top of the FILE when files were skipped, and omits it otherwise", () => {
+    const warning = "2 file(s) were skipped or only partially scanned (larger than 2 MiB, or too many inline scripts): a.js, b.html. Findings in them are missing, so this scan is incomplete.";
+    const markdown = generatePolicyMarkdown(makeScanResult({ skippedFilesWarning: warning }), null);
+
+    const bannerIndex = markdown.indexOf("WARNING: FILES SKIPPED");
+    expect(bannerIndex).toBeGreaterThan(markdown.indexOf("# Privacy Policy"));
+    expect(bannerIndex).toBeLessThan(markdown.indexOf("## Scope"));
+    expect(markdown).toContain("a.js, b.html");
+
+    expect(generatePolicyMarkdown(makeScanResult({ skippedFilesWarning: null }), null)).not.toContain("FILES SKIPPED");
+  });
+});
