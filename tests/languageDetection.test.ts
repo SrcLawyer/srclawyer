@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { detectUnsupportedStack } from "../src/engine/languageDetection.js";
+import { detectUnsupportedStack as detect } from "../src/engine/languageDetection.js";
+import { RootBoundary } from "../src/engine/rootBoundary.js";
+
+const detectUnsupportedStack = (dir: string) => detect(dir, new RootBoundary(dir));
 
 function tempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));

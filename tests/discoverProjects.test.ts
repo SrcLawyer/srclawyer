@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { discoverProjects } from "../src/engine/discoverProjects.js";
+import { RootBoundary } from "../src/engine/rootBoundary.js";
 
 let dir: string;
 
@@ -17,7 +18,7 @@ function makeRepo(packageJson: string, packages: string[] = []): string {
 }
 
 async function projectRoots(root: string): Promise<{ roots: string[]; warning: string | null }> {
-  const { projects, workspaceWarning } = await discoverProjects(root);
+  const { projects, workspaceWarning } = await discoverProjects(root, new RootBoundary(root));
   return { roots: projects.map((p) => relative(root, p.root)).sort(), warning: workspaceWarning };
 }
 

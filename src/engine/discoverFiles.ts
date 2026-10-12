@@ -1,4 +1,5 @@
 import { globFiles } from "./globFiles.js";
+import type { RootBoundary } from "./rootBoundary.js";
 
 const CODE_PATTERNS = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"];
 const PYTHON_PATTERNS = ["**/*.py"];
@@ -39,13 +40,13 @@ export interface DiscoveredFiles {
   manifestFiles: string[];
 }
 
-export async function discoverFiles(root: string): Promise<DiscoveredFiles> {
+export async function discoverFiles(root: string, boundary: RootBoundary): Promise<DiscoveredFiles> {
   const [codeFiles, pythonFiles, htmlFiles, schemaFiles, manifestFiles] = await Promise.all([
-    globFiles(CODE_PATTERNS, { cwd: root, absolute: true, ignore: IGNORE, dot: false }),
-    globFiles(PYTHON_PATTERNS, { cwd: root, absolute: true, ignore: PYTHON_IGNORE, dot: false }),
-    globFiles(HTML_PATTERNS, { cwd: root, absolute: true, ignore: IGNORE, dot: false }),
-    globFiles(SCHEMA_PATTERNS, { cwd: root, absolute: true, ignore: ["**/node_modules/**"], dot: false }),
-    globFiles(MANIFEST_PATTERNS, { cwd: root, absolute: true, ignore: ["**/node_modules/**"], dot: false }),
+    globFiles(CODE_PATTERNS, { cwd: root, absolute: true, ignore: IGNORE, dot: false, boundary }),
+    globFiles(PYTHON_PATTERNS, { cwd: root, absolute: true, ignore: PYTHON_IGNORE, dot: false, boundary }),
+    globFiles(HTML_PATTERNS, { cwd: root, absolute: true, ignore: IGNORE, dot: false, boundary }),
+    globFiles(SCHEMA_PATTERNS, { cwd: root, absolute: true, ignore: ["**/node_modules/**"], dot: false, boundary }),
+    globFiles(MANIFEST_PATTERNS, { cwd: root, absolute: true, ignore: ["**/node_modules/**"], dot: false, boundary }),
   ]);
 
   return { codeFiles, pythonFiles, htmlFiles, schemaFiles, manifestFiles };

@@ -5,11 +5,18 @@ import type { Finding } from "../engine/types.js";
 import { classifyFieldName, isAmbiguousFieldName } from "../rules/dataCategoryLexicon.js";
 import { isSafeFieldName } from "../rules/safeFieldNames.js";
 
-export function parseOpenApiSpec(filePath: string, root: string): Finding[] {
+/** Set by parseOpenApiSpec so the caller can surface a malformed document instead of silently getting
+ *  fewer (or no) findings -- the YAML parser recovers from errors rather than throwing. */
+export interface OpenApiParseReport {
+  hadErrors: boolean;
+}
+
+export function parseOpenApiSpec(filePath: string, root: string, report?: OpenApiParseReport): Finding[] {
   const raw = readFileSync(filePath, "utf8");
 
   const lineCounter = new LineCounter();
   const doc = parseDocument(raw, { lineCounter, keepSourceTokens: true });
+  if (report && doc.errors.length > 0) report.hadErrors = true;
   if (!doc.contents) return [];
 
   const relPath = relative(root, filePath);

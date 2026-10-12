@@ -138,7 +138,7 @@ function renderWorkspaceWarning(warning: string): string {
 // Same reasoning as the other banners: files skipped for size mean findings in them are missing from
 // a policy file that will be committed and shared without the console output.
 function renderSkippedFilesWarning(warning: string): string {
-  return ["> **WARNING: FILES SKIPPED — SCAN INCOMPLETE**", ">", `> ${warning}`].join("\n");
+  return ["> **WARNING: FILES SKIPPED OR NOT ANALYZED — SCAN INCOMPLETE**", ">", `> ${warning}`].join("\n");
 }
 
 function placeholder(label: string): string {

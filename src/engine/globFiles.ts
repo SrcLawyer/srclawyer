@@ -1,10 +1,13 @@
 import { glob } from "tinyglobby";
+import type { RootBoundary } from "./rootBoundary.js";
 
 export interface GlobFilesOptions {
   cwd: string;
   absolute?: boolean;
   ignore?: string[];
   dot?: boolean;
+  /** When given, symlinks resolving outside the scanned root are neither walked nor returned. */
+  boundary?: RootBoundary;
 }
 
 // expandDirectories: false keeps tinyglobby's matching identical to the fast-glob behavior this
@@ -15,5 +18,6 @@ export interface GlobFilesOptions {
 // Sorted so scan order (and therefore the order of findings in reports) doesn't depend on filesystem
 // traversal order, which neither fast-glob nor tinyglobby guarantees.
 export async function globFiles(patterns: string | string[], options: GlobFilesOptions): Promise<string[]> {
-  return (await glob(patterns, { expandDirectories: false, ...options })).sort();
+  const { boundary, ...globOptions } = options;
+  return (await glob(patterns, { expandDirectories: false, ...globOptions, ...(boundary ? { fs: boundary.globFs() } : {}) })).sort();
 }

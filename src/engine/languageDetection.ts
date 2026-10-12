@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { globFiles } from "./globFiles.js";
+import type { RootBoundary } from "./rootBoundary.js";
 
 const IGNORE = ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**", "**/vendor/**", "**/venv/**", "**/.venv/**", "**/__pycache__/**"];
 
@@ -23,7 +24,7 @@ function bannerize(message: string): string {
   return `UNSUPPORTED CODEBASE — ${message} SrcLawyer only analyzes JavaScript/TypeScript, HTML, and Flask-based Python today; the findings below (if any) are incomplete and MUST NOT be treated as a full compliance scan.`;
 }
 
-async function detectFrameworkSignature(root: string): Promise<string | null> {
+async function detectFrameworkSignature(root: string, boundary: RootBoundary): Promise<string | null> {
   if (existsSync(join(root, "manage.py"))) {
     return bannerize("Django detected (manage.py found at the project root) — Django support isn't built yet.");
   }
@@ -34,7 +35,7 @@ async function detectFrameworkSignature(root: string): Promise<string | null> {
     return bannerize("Rails detected (Gemfile + a Rails app/config layout found).");
   }
 
-  const protoFiles = await globFiles("**/*.proto", { cwd: root, ignore: IGNORE, dot: false });
+  const protoFiles = await globFiles("**/*.proto", { cwd: root, ignore: IGNORE, dot: false, boundary });
   if (protoFiles.length > 0) {
     return bannerize(`gRPC/Protocol Buffers detected (${protoFiles.length} .proto file(s) found) — protobuf schemas are not parsed.`);
   }
@@ -63,10 +64,10 @@ async function detectUnsupportedPythonFramework(root: string, pythonFiles: strin
   return null;
 }
 
-async function detectDominantUnsupportedLanguage(root: string): Promise<string | null> {
+async function detectDominantUnsupportedLanguage(root: string, boundary: RootBoundary): Promise<string | null> {
   const [supportedFiles, ...unsupportedGroups] = await Promise.all([
-    globFiles(SUPPORTED_EXTENSIONS.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false }),
-    ...UNSUPPORTED_LANGUAGES.map((lang) => globFiles(lang.extensions.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false })),
+    globFiles(SUPPORTED_EXTENSIONS.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false, boundary }),
+    ...UNSUPPORTED_LANGUAGES.map((lang) => globFiles(lang.extensions.map((ext) => `**/*.${ext}`), { cwd: root, ignore: IGNORE, dot: false, boundary })),
   ]);
 
   const counts = UNSUPPORTED_LANGUAGES.map((lang, i) => ({ label: lang.label, count: unsupportedGroups[i].length }));
@@ -77,15 +78,15 @@ async function detectDominantUnsupportedLanguage(root: string): Promise<string |
   return bannerize(`${dominant.label} detected as the primary language (${dominant.count} file(s), vs ${supportedFiles.length} supported file(s)).`);
 }
 
-export async function detectUnsupportedStack(root: string): Promise<string | null> {
-  const frameworkWarning = await detectFrameworkSignature(root);
+export async function detectUnsupportedStack(root: string, boundary: RootBoundary): Promise<string | null> {
+  const frameworkWarning = await detectFrameworkSignature(root, boundary);
   if (frameworkWarning) return frameworkWarning;
 
-  const pythonFiles = await globFiles("**/*.py", { cwd: root, absolute: true, ignore: IGNORE, dot: false });
+  const pythonFiles = await globFiles("**/*.py", { cwd: root, absolute: true, ignore: IGNORE, dot: false, boundary });
   if (pythonFiles.length > 0) {
     const pythonFrameworkWarning = await detectUnsupportedPythonFramework(root, pythonFiles);
     if (pythonFrameworkWarning) return pythonFrameworkWarning;
   }
 
-  return detectDominantUnsupportedLanguage(root);
+  return detectDominantUnsupportedLanguage(root, boundary);
 }

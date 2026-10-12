@@ -14,7 +14,8 @@ import { runPythonFrameworkRules } from "../rules/pythonFrameworkRules.js";
 import { findZodCandidates, type ZodCandidate } from "../rules/zodPreFilter.js";
 import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
 import { runHtmlInputRules, extractInlineScriptsBounded } from "../rules/htmlRules.js";
-import { isOversizedFile, summarizeSkippedFiles, type SkippedFile } from "./scanLimits.js";
+import { isOversizedFile, summarizeSkippedFiles, type SkipReason, type SkippedFile } from "./scanLimits.js";
+import { RootBoundary } from "./rootBoundary.js";
 import { parseOpenApiSpec } from "../schemaParsers/openapi.js";
 import { parseGraphQLSchema } from "../schemaParsers/graphql.js";
 import type { Finding, ScanResult } from "./types.js";
@@ -27,12 +28,12 @@ const GRAPHQL_NAME = /\.(graphql|gql)$/i;
 // ~2.5s/~800MB and ~2.2s/~650MB respectively for a full ts.Program build. Eager construction would tax
 // every scan of a large project regardless of whether it ever hits the one pattern that needs it;
 // memoized-lazy pays that cost at most once, only on the scan that actually earns it.
-function makeLazyTsProject(files: string[]): () => TsProjectHandle | null {
+function makeLazyTsProject(files: string[], boundary: RootBoundary): () => TsProjectHandle | null {
   let handle: TsProjectHandle | null | undefined;
   return () => {
     if (handle === undefined) {
       try {
-        handle = buildTsProject(files);
+        handle = buildTsProject(files, boundary);
       } catch {
         handle = null;
       }
@@ -41,6 +42,14 @@ function makeLazyTsProject(files: string[]): () => TsProjectHandle | null {
   };
 }
 
+type RuleFailure = "parse-failed" | "analysis-failed" | null;
+
+/**
+ * Per-file containment: nothing a single file does (a parse failure, or an exception such as the
+ * RangeError a very deep AST throws inside @babel/traverse) may abort the scan or discard the other
+ * files' findings. Each rule group is isolated so one group failing keeps the others' findings for the
+ * same file, and the failure comes back as a reason for the caller to record -- never swallowed.
+ */
 function runCodeRules(
   filePath: string,
   source: string,
@@ -48,26 +57,62 @@ function runCodeRules(
   getTsProject: () => TsProjectHandle | null,
   zodCandidates: ZodCandidate[],
   oversizedZodFiles: string[]
-): Finding[] {
-  const ast = parseSource(source, filePath);
-  const zodResult = findZodCandidates(source, filePath, root);
-  zodCandidates.push(...zodResult.candidates);
-  oversizedZodFiles.push(...zodResult.oversizedFiles);
-  if (!ast) return [];
+): { findings: Finding[]; failure: RuleFailure } {
+  let failure: RuleFailure = null;
+  const findings: Finding[] = [];
 
-  return [
-    ...runSdkRules(ast, filePath, source, root),
-    ...runFrameworkRules(ast, filePath, source, root),
-    ...runWebApiRules(ast, filePath, source, root),
-    ...runTypedRequestBodyRules(ast, filePath, source, root, getTsProject),
+  let ast: ReturnType<typeof parseSource> = null;
+  try {
+    ast = parseSource(source, filePath);
+  } catch {
+    ast = null;
+  }
+
+  try {
+    const zodResult = findZodCandidates(source, filePath, root);
+    zodCandidates.push(...zodResult.candidates);
+    oversizedZodFiles.push(...zodResult.oversizedFiles);
+  } catch {
+    failure = "analysis-failed";
+  }
+
+  if (!ast) return { findings, failure: failure ?? "parse-failed" };
+
+  const groups = [
+    () => runSdkRules(ast, filePath, source, root),
+    () => runFrameworkRules(ast, filePath, source, root),
+    () => runWebApiRules(ast, filePath, source, root),
+    () => runTypedRequestBodyRules(ast, filePath, source, root, getTsProject),
   ];
+  for (const run of groups) {
+    try {
+      findings.push(...run());
+    } catch {
+      failure = "analysis-failed";
+    }
+  }
+  return { findings, failure };
 }
 
-async function runPythonCodeRules(filePath: string, source: string, root: string): Promise<Finding[]> {
-  const tree = await parsePythonSource(source);
-  if (!tree) return [];
+async function runPythonCodeRules(filePath: string, source: string, root: string): Promise<{ findings: Finding[]; failure: RuleFailure }> {
+  let tree: Awaited<ReturnType<typeof parsePythonSource>> = null;
+  try {
+    tree = await parsePythonSource(source);
+  } catch {
+    tree = null;
+  }
+  if (!tree) return { findings: [], failure: "parse-failed" };
 
-  return [...runPythonSdkRules(tree, filePath, source, root), ...runPythonFrameworkRules(tree, filePath, source, root)];
+  const findings: Finding[] = [];
+  let failure: RuleFailure = null;
+  for (const run of [() => runPythonSdkRules(tree, filePath, source, root), () => runPythonFrameworkRules(tree, filePath, source, root)]) {
+    try {
+      findings.push(...run());
+    } catch {
+      failure = "analysis-failed";
+    }
+  }
+  return { findings, failure };
 }
 
 /**
@@ -80,23 +125,60 @@ async function runPythonCodeRules(filePath: string, source: string, root: string
  * reading this file alone.
  */
 export async function scan(root: string): Promise<ScanResult> {
-  const [{ projects, workspaceWarning }, unsupportedStackWarning] = await Promise.all([discoverProjects(root), detectUnsupportedStack(root)]);
+  const boundary = new RootBoundary(root);
+  const [{ projects, workspaceWarning }, unsupportedStackWarning] = await Promise.all([
+    discoverProjects(root, boundary),
+    detectUnsupportedStack(root, boundary),
+  ]);
   const findings: Finding[] = [];
   const pendingZodCandidates: ZodCandidate[] = [];
   const oversizedZodFiles: string[] = [];
   const skippedFiles: SkippedFile[] = [];
   let filesScanned = 0;
 
-  // One cap for every scanned file type; a skipped file is recorded (and surfaced as a warning), never
-  // silently dropped.
-  const skipIfOversized = (filePath: string): boolean => {
-    if (!isOversizedFile(filePath)) return false;
-    skippedFiles.push({ file: relative(root, filePath), reason: "oversized" });
-    return true;
+  const recordSkip = (filePath: string, reason: SkipReason): void => {
+    const file = relative(root, filePath);
+    if (!skippedFiles.some((s) => s.file === file && s.reason === reason)) skippedFiles.push({ file, reason });
+  };
+
+  // The one gate every scanned file passes through before any content is read: real path inside the
+  // scanned root (the glob layer already refuses to return out-of-root symlinks; this re-checks at read
+  // time), then the shared size cap, then the read itself. A skipped file is recorded and surfaced as
+  // a warning, never silently dropped. Returns null when the file must not be analyzed.
+  const readScannable = (filePath: string): string | null => {
+    if (!boundary.allowsPath(filePath)) return null; // recorded by the boundary as a blocked link
+    if (isOversizedFile(filePath)) {
+      recordSkip(filePath, "oversized");
+      return null;
+    }
+    filesScanned += 1;
+    try {
+      return readFileSync(filePath, "utf8");
+    } catch {
+      recordSkip(filePath, "unreadable");
+      return null;
+    }
   };
 
   const projectRootList = [...new Set(projects.map((p) => p.root))];
-  const fileSets = await Promise.all(projectRootList.map((projectRoot) => discoverFiles(projectRoot)));
+  const fileSets = await Promise.all(projectRootList.map((projectRoot) => discoverFiles(projectRoot, boundary)));
+
+  // The same real file can be reached by several paths (an in-root symlink, or a directory loop that
+  // stays inside the root); scan it once, under its shortest path, so findings aren't duplicated.
+  const seenRealPaths = new Map<string, string>();
+  const claimsRealPath = (filePath: string): boolean => {
+    const real = boundary.resolveInside(filePath);
+    if (real === null) return true; // let readScannable record why it is being skipped
+    const holder = seenRealPaths.get(real);
+    if (holder === undefined) {
+      seenRealPaths.set(real, filePath);
+      return true;
+    }
+    return holder === filePath;
+  };
+  const shortestPathFirst = (paths: string[]): string[] => [...paths].sort((a, b) => a.length - b.length || a.localeCompare(b));
+  // Claimed shortest-first, but returned in the original sorted order so report order is unchanged.
+  const claimed = (paths: string[]): string[] => shortestPathFirst(paths).filter(claimsRealPath).sort();
 
   const allCodeFiles = new Set<string>();
   const allPythonFiles = new Set<string>();
@@ -106,81 +188,83 @@ export async function scan(root: string): Promise<ScanResult> {
   const tsProjectByRoot = new Map<string, () => TsProjectHandle | null>();
   fileSets.forEach((set, i) => {
     const projectRoot = projectRootList[i];
-    tsProjectByRoot.set(projectRoot, makeLazyTsProject(set.codeFiles));
-    set.codeFiles.forEach((f) => {
+    tsProjectByRoot.set(projectRoot, makeLazyTsProject(set.codeFiles, boundary));
+    claimed(set.codeFiles).forEach((f) => {
       allCodeFiles.add(f);
       rootForFile.set(f, projectRoot);
     });
-    set.pythonFiles.forEach((f) => allPythonFiles.add(f));
-    set.htmlFiles.forEach((f) => allHtmlFiles.add(f));
-    set.schemaFiles.forEach((f) => allSchemaFiles.add(f));
+    claimed(set.pythonFiles).forEach((f) => allPythonFiles.add(f));
+    claimed(set.htmlFiles).forEach((f) => allHtmlFiles.add(f));
+    claimed(set.schemaFiles).forEach((f) => allSchemaFiles.add(f));
   });
   // HTML files (and their inline <script> blocks) aren't part of any codeFiles list and never carry
   // a resolvable TS type, so they get a permanently-null thunk rather than a project association.
   const noTsProject = () => null;
 
   for (const filePath of allCodeFiles) {
-    if (skipIfOversized(filePath)) continue;
-    filesScanned += 1;
-    let source: string;
-    try {
-      source = readFileSync(filePath, "utf8");
-    } catch {
-      continue;
-    }
+    const source = readScannable(filePath);
+    if (source === null) continue;
 
     const getTsProject = tsProjectByRoot.get(rootForFile.get(filePath) ?? "") ?? noTsProject;
-    findings.push(...runCodeRules(filePath, source, root, getTsProject, pendingZodCandidates, oversizedZodFiles));
+    const result = runCodeRules(filePath, source, root, getTsProject, pendingZodCandidates, oversizedZodFiles);
+    findings.push(...result.findings);
+    if (result.failure) recordSkip(filePath, result.failure);
   }
 
   for (const filePath of allPythonFiles) {
-    if (skipIfOversized(filePath)) continue;
-    filesScanned += 1;
-    let source: string;
-    try {
-      source = readFileSync(filePath, "utf8");
-    } catch {
-      continue;
-    }
+    const source = readScannable(filePath);
+    if (source === null) continue;
 
-    findings.push(...(await runPythonCodeRules(filePath, source, root)));
+    const result = await runPythonCodeRules(filePath, source, root);
+    findings.push(...result.findings);
+    if (result.failure) recordSkip(filePath, result.failure);
   }
 
   for (const filePath of allHtmlFiles) {
-    if (skipIfOversized(filePath)) continue;
-    filesScanned += 1;
-    let html: string;
+    const html = readScannable(filePath);
+    if (html === null) continue;
+
     try {
-      html = readFileSync(filePath, "utf8");
+      findings.push(...runHtmlInputRules(html, filePath, root));
     } catch {
-      continue;
+      recordSkip(filePath, "analysis-failed");
     }
 
-    findings.push(...runHtmlInputRules(html, filePath, root));
-    const { scripts, skippedCount } = extractInlineScriptsBounded(html);
-    if (skippedCount > 0) skippedFiles.push({ file: relative(root, filePath), reason: "inline-scripts-truncated" });
-    for (const script of scripts) {
-      findings.push(...runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates, oversizedZodFiles));
+    let extraction: ReturnType<typeof extractInlineScriptsBounded> = { scripts: [], skippedCount: 0 };
+    try {
+      extraction = extractInlineScriptsBounded(html);
+    } catch {
+      recordSkip(filePath, "analysis-failed");
+    }
+    if (extraction.skippedCount > 0) recordSkip(filePath, "inline-scripts-truncated");
+    for (const script of extraction.scripts) {
+      const result = runCodeRules(filePath, script.code, root, noTsProject, pendingZodCandidates, oversizedZodFiles);
+      findings.push(...result.findings);
+      if (result.failure) recordSkip(filePath, result.failure);
     }
   }
 
   for (const filePath of allSchemaFiles) {
-    if (skipIfOversized(filePath)) continue;
+    if (!boundary.allowsPath(filePath)) continue;
+    if (isOversizedFile(filePath)) {
+      recordSkip(filePath, "oversized");
+      continue;
+    }
     filesScanned += 1;
-    if (OPENAPI_NAME.test(filePath)) {
-      try {
-        findings.push(...parseOpenApiSpec(filePath, root));
-      } catch {
-        continue;
-      }
-    } else if (GRAPHQL_NAME.test(filePath) || extname(filePath) === ".graphql") {
-      try {
+    try {
+      if (OPENAPI_NAME.test(filePath)) {
+        const report = { hadErrors: false };
+        findings.push(...parseOpenApiSpec(filePath, root, report));
+        if (report.hadErrors) recordSkip(filePath, "parse-failed");
+      } else if (GRAPHQL_NAME.test(filePath) || extname(filePath) === ".graphql") {
         findings.push(...parseGraphQLSchema(filePath, root));
-      } catch {
-        continue;
       }
+    } catch {
+      recordSkip(filePath, "parse-failed");
     }
   }
+
+  for (const link of boundary.blockedLinks()) skippedFiles.push({ file: link, reason: "symlink-outside-root" });
 
   const ambiguousCount = findings.filter((f) => f.requiresReview).length;
   const maxZodFragmentBytes = pendingZodCandidates.length

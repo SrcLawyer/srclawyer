@@ -83,9 +83,12 @@ export interface ScanResult {
   /** Non-null when the scanned repo's workspace config was rejected and the default package
    *  locations were scanned instead (see discoverProjects.ts) -- the scan may be incomplete. */
   workspaceWarning: string | null;
-  /** Every file skipped for exceeding the shared size cap, or only partially scanned (too many inline
-   *  scripts) -- the complete list, including everything the one-line warning below elides. */
-  skippedFiles: Array<{ file: string; reason: "oversized" | "inline-scripts-truncated" }>;
+  /** Every file skipped, blocked (out-of-root symlink), unparseable, or aborted mid-analysis, or only
+   *  partially scanned -- the complete list, including everything the one-line warning below elides. */
+  skippedFiles: Array<{
+    file: string;
+    reason: "oversized" | "inline-scripts-truncated" | "symlink-outside-root" | "unreadable" | "parse-failed" | "analysis-failed";
+  }>;
   /** One summarized line naming a few of skippedFiles; null when nothing was skipped. */
   skippedFilesWarning: string | null;
   /**

@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { globFiles } from "./globFiles.js";
+import type { RootBoundary } from "./rootBoundary.js";
 import type { ProjectManifest } from "./types.js";
 import { validateWorkspacePatterns } from "./workspacePatterns.js";
 
@@ -18,7 +19,8 @@ function rejectedConfigWarning(reason: string): string {
   return `Workspace configuration in package.json was rejected (${reason}); the default package locations (${DEFAULT_WORKSPACE_PATTERNS.join(", ")}) were scanned instead, so this scan may be incomplete.`;
 }
 
-function readPackageJson(path: string): { value: unknown } | { error: string } {
+function readPackageJson(path: string, boundary: RootBoundary): { value: unknown } | { error: string } {
+  if (!boundary.allowsPath(path)) return { error: "package.json resolves outside the scanned root" };
   try {
     // A leading BOM (common from Windows editors) is valid in practice but not to JSON.parse.
     const text = readFileSync(path, "utf8").replace(/^﻿/, "");
@@ -37,21 +39,21 @@ function rawWorkspaces(pkg: unknown): unknown {
   return workspaces;
 }
 
-async function globManifests(patterns: string[], root: string): Promise<string[]> {
+async function globManifests(patterns: string[], root: string, boundary: RootBoundary): Promise<string[]> {
   return globFiles(
     patterns.map((p) => (p.startsWith("!") ? `!${join(p.slice(1), "package.json")}` : join(p, "package.json"))),
-    { cwd: root, absolute: true, ignore: ["**/node_modules/**"] }
+    { cwd: root, absolute: true, ignore: ["**/node_modules/**"], boundary }
   );
 }
 
-export async function discoverProjects(root: string): Promise<ProjectDiscovery> {
+export async function discoverProjects(root: string, boundary: RootBoundary): Promise<ProjectDiscovery> {
   const rootPackageJsonPath = join(root, "package.json");
   if (!existsSync(rootPackageJsonPath)) {
     return { projects: [{ root, kind: "unknown", manifestPath: null }], workspaceWarning: null };
   }
 
   const rootProject: ProjectManifest = { root, kind: "node", manifestPath: rootPackageJsonPath };
-  const parsed = readPackageJson(rootPackageJsonPath);
+  const parsed = readPackageJson(rootPackageJsonPath, boundary);
 
   let workspaceWarning: string | null = null;
   let patterns: string[] | null = null;
@@ -76,13 +78,13 @@ export async function discoverProjects(root: string): Promise<ProjectDiscovery> 
 
   let manifestPaths: string[];
   try {
-    manifestPaths = await globManifests(patterns ?? DEFAULT_WORKSPACE_PATTERNS, root);
+    manifestPaths = await globManifests(patterns ?? DEFAULT_WORKSPACE_PATTERNS, root, boundary);
   } catch {
     // Belt and braces behind validateWorkspacePatterns: a pattern that still fails to expand must
     // never take the whole scan down.
     workspaceWarning = rejectedConfigWarning("the patterns could not be expanded");
     try {
-      manifestPaths = await globManifests(DEFAULT_WORKSPACE_PATTERNS, root);
+      manifestPaths = await globManifests(DEFAULT_WORKSPACE_PATTERNS, root, boundary);
     } catch {
       manifestPaths = [];
     }
