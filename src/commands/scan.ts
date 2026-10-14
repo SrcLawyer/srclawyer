@@ -97,7 +97,7 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
     return;
   }
 
-  console.log(formatText(finalResult));
+  console.log(formatText(finalResult, { aiReviewEnabled: config?.tier === "byok" }));
   if (protectedLogicWarning) console.log(`\n${protectedLogicWarning}`);
   if (legacyConfigWarning) console.log(`\n${legacyConfigWarning}`);
   console.log(`\nPrivacy policy written to ${join(options.out)}`);

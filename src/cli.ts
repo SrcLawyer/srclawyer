@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { runInit } from "./commands/init.js";
+import { isValidEnvVarName, runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
 
 // Read from package.json rather than hardcoding, so --version can't silently drift out of sync with
@@ -32,6 +32,8 @@ interface InitCliOptions {
   accountDeletionInstructions?: string;
   minimumAge?: string;
   sendsDataToAiServices?: boolean;
+  enableAiReview?: boolean;
+  apiKeyEnvVar?: string;
 }
 
 program
@@ -57,7 +59,14 @@ program
   .option("--minimum-age <number>", "minimum age required to use this product")
   .option("--sends-data-to-ai-services", "declare that user data is sent to third-party AI services")
   .option("--no-sends-data-to-ai-services", "declare that user data is not sent to third-party AI services")
+  .option("--enable-ai-review", "advanced: enable optional AI-assisted review of ambiguous findings with your own Anthropic API key (sets tier: byok)")
+  .option("--api-key-env-var <name>", "with --enable-ai-review: the environment variable holding your Anthropic API key (default ANTHROPIC_API_KEY)")
   .action(async (opts: InitCliOptions) => {
+    if (opts.apiKeyEnvVar !== undefined) {
+      if (!opts.enableAiReview) program.error("error: --api-key-env-var requires --enable-ai-review");
+      if (!isValidEnvVarName(opts.apiKeyEnvVar)) program.error(`error: --api-key-env-var must be a valid environment variable name (got "${opts.apiKeyEnvVar}")`);
+    }
+
     let minimumAge: number | undefined;
     if (opts.minimumAge !== undefined) {
       const parsed = Number(opts.minimumAge);
@@ -81,6 +90,8 @@ program
       accountDeletionInstructions: opts.accountDeletionInstructions,
       minimumAge,
       sendsDataToAiServices: opts.sendsDataToAiServices,
+      enableAiReview: opts.enableAiReview,
+      apiKeyEnvVar: opts.apiKeyEnvVar,
     });
   });
 

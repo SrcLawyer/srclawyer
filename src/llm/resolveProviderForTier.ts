@@ -14,7 +14,7 @@ export function resolveProviderForTier(config: SrcLawyerConfig): ProviderResolut
     if (!envVar) {
       return {
         provider: null,
-        error: `Tier is "byok" but no API key environment variable is configured in ${CONFIG_FILENAME}. Run "srclawyer init" to set one.`,
+        error: `Tier is "byok" but no API key environment variable is configured in ${CONFIG_FILENAME}. Add "llm: { provider: anthropic, apiKeyEnvVar: <ENV_VAR_NAME> }" to it, or delete the file and re-run "srclawyer init --enable-ai-review".`,
       };
     }
     const apiKey = process.env[envVar];

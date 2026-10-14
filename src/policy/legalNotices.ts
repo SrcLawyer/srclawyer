@@ -9,8 +9,9 @@
 export const PRIVACY_POLICY_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 export const TERMS_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 
-// Verbatim from README.md's own "Network calls" section (minus markdown backticks, since this prints
-// to a terminal) -- one wording for this claim, not a second paraphrase that can drift from the first.
+// Mirrors README.md's own "Network calls" section (minus markdown backticks, since this prints to a
+// terminal, and minus its closing pointer to the optional AI-assisted review) -- one wording for this
+// claim, not a second paraphrase that can drift from the first.
 export const NETWORK_CALLS_NOTICE = [
   "Heads up: SrcLawyer makes network calls.",
   "",
@@ -18,7 +19,7 @@ export const NETWORK_CALLS_NOTICE = [
   "Once detection completes, scan makes one batched network call to grade the confidence of what it",
   "found (field names and derived yes/no signals only, never source code), and, for scans that use Zod",
   "schemas as request validators, one additional call sending a small redacted code fragment. This runs",
-  "on every scan regardless of tier.",
+  "on every scan.",
   "",
   `Legal notice and disclaimer: ${PRIVACY_POLICY_URL}`,
   "(A dedicated privacy policy and terms of service are coming; this points to what exists today.)",

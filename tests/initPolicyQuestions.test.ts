@@ -24,7 +24,7 @@ async function runWithStdin(root: string, answers: string[], flags: InitFlags = 
 // Question order once the gate resolves to yes: entityLocation, targetMarkets, industry, gate,
 // collectsChildrensData, minimumAge, companyName, siteUrl, privacyContactEmail, hasEuUkUsers,
 // hasCaliforniaUsers, sellsOrSharesData, usesDataForAdvertising, dataRetentionPolicy,
-// accountDeletionInstructions, sendsDataToAiServices, enableByok.
+// accountDeletionInstructions, sendsDataToAiServices.
 
 describe("init: optional policy-detail questions", () => {
   let dir: string;
@@ -56,7 +56,6 @@ describe("init: optional policy-detail questions", () => {
       "2 years after account closure", // dataRetentionPolicy
       "Email privacy@acme.example", // accountDeletionInstructions
       "n", // sendsDataToAiServices
-      "n", // enable byok
     ]);
 
     const config = loadConfig(dir);
@@ -84,7 +83,6 @@ describe("init: optional policy-detail questions", () => {
       "",
       "",
       "n", // decline the gate
-      "n", // enable byok
     ]);
 
     const config = loadConfig(dir);
@@ -128,7 +126,6 @@ describe("init: optional policy-detail questions", () => {
       "", // dataRetentionPolicy
       "", // accountDeletionInstructions
       "n", // sendsDataToAiServices
-      "n", // enable byok
     ]);
 
     const config = loadConfig(dir);
@@ -225,7 +222,6 @@ describe("init: optional policy-detail questions", () => {
       "", // dataRetentionPolicy
       "", // accountDeletionInstructions
       "n", // sendsDataToAiServices
-      "n", // enable byok
     ]);
 
     const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");

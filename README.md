@@ -2,7 +2,7 @@
 
 Static analysis engine that derives privacy policy documentation directly from source code, and keeps it in sync as the code changes.
 
-> **Beta.** The CLI (`init`, `scan`), the Layer 1 static analysis engine, and markdown privacy policy generation all work today. JavaScript/TypeScript (Express, Next.js) is the most tested path; Python (Flask) is newer, with FastAPI and Django explicitly detected and flagged as unsupported rather than silently skipped — see [Supported languages and frameworks](#supported-languages-and-frameworks) and [Known gaps](#known-gaps) below. LLM-assisted reasoning for ambiguous findings (Layer 2) is available now under the bring-your-own-key tier, documented below as one optional step in `init` — a managed (hosted) tier is planned but not yet available.
+> **Beta.** The CLI (`init`, `scan`), the Layer 1 static analysis engine, and markdown privacy policy generation all work today. JavaScript/TypeScript (Express, Next.js) is the most tested path; Python (Flask) is newer, with FastAPI and Django explicitly detected and flagged as unsupported rather than silently skipped — see [Supported languages and frameworks](#supported-languages-and-frameworks) and [Known gaps](#known-gaps) below. Optional AI-assisted review of ambiguous findings (Layer 2) is available as an advanced option with your own Anthropic API key — see [AI-assisted review](#ai-assisted-review-advanced) below; a hosted tier that needs no key is planned but not yet available.
 >
 > Scanning is manual-only (`srclawyer scan`, run on demand) — this is the free/solo tier's permanent behavior, not a placeholder. Automatic CI/CD updating (a scan that runs itself on every PR, or on a schedule) isn't available yet; it's scoped for a future paid/team tier. See `PRODUCT_SPEC.md` Section 8.5 for the plan.
 
@@ -93,9 +93,33 @@ Every finding traces back to a file and line (`src/engine/types.ts#Finding`).
 - **Flask support covers direct request reads and same-function aliases only.** It detects `request.form[...]`, `request.args.get(...)`, `request.json[...]` and the like, plus one assignment hop within a function (`data = request.get_json()`, then `data['x']`). Form classes — Flask-WTF/WTForms `FlaskForm` subclasses with `StringField`/`PasswordField` declarations read via `form.email.data` — are not detected, and neither are fields rendered by template helpers such as `{{ form.email() }}`. A Flask app that collects data through WTForms may therefore show fewer collected fields than it actually has.
 - **Server-side template syntax inside HTML is not analyzed.** Jinja, Django, ERB and similar delimiters (`{{`, `{%`, `<%`, `{#`) are not interpreted: an inline `<script>` that isn't valid JavaScript until the template engine runs is skipped (listed in `--json` as `template-syntax`, with a one-line note), and form fields that a template generates rather than spells out as `<input>` tags are not seen.
 
+## AI-assisted review (advanced)
+
+Off by default, and not part of `init`'s questions. `scan` already surfaces anything it can't confidently classify under "Items Requiring Manual Review"; with AI-assisted review enabled it first sends a redacted snippet of each such item to Anthropic, under **your own API key**, and tries to classify it. Items the model declines stay in the manual-review list, and items involving children's data are never auto-resolved.
+
+Enable it when creating the config:
+
+```bash
+srclawyer init --enable-ai-review                              # asks which env var holds your key (default ANTHROPIC_API_KEY)
+srclawyer init --enable-ai-review --api-key-env-var MY_KEY     # same, non-interactive
+export ANTHROPIC_API_KEY=...                                   # or whichever name you chose
+srclawyer scan
+```
+
+or, for an existing config (`init` never overwrites one), add this to `.srclawyer.config.yml` by hand:
+
+```yaml
+tier: byok
+llm:
+  provider: anthropic
+  apiKeyEnvVar: ANTHROPIC_API_KEY
+```
+
+Only the variable's *name* is stored in the config — the key itself is never written to disk. When it's enabled, `scan` prints a notice that redacted snippets are being sent to Anthropic; `scan --no-llm` skips it for a single run. A hosted tier, where SrcLawyer supplies the model access and no key is needed, is planned but not yet available: a config with `tier: managed` gets a clear "not available yet" error rather than silently doing nothing.
+
 ## Network calls
 
-Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, `scan` makes one batched network call to grade the confidence of what it found (field names and derived yes/no signals only, never source code), and, for scans that use Zod schemas as request validators, one additional call sending a small redacted code fragment. This runs on every scan regardless of tier and is unrelated to the separate, optional LLM-assisted (Layer 2) reasoning described above. See `PRODUCT_SPEC.md`'s "Static Analysis Depth" section for the precise wording.
+Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, `scan` makes one batched network call to grade the confidence of what it found (field names and derived yes/no signals only, never source code), and, for scans that use Zod schemas as request validators, one additional call sending a small redacted code fragment. This runs on every scan, with or without the optional [AI-assisted review](#ai-assisted-review-advanced) described above, and is separate from it. See `PRODUCT_SPEC.md`'s "Static Analysis Depth" section for the precise wording.
 
 ## Secret handling
 

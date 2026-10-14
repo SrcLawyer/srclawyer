@@ -26,8 +26,8 @@ async function runWithStdin(root: string, answers: string[], flags: InitFlags = 
 }
 
 // entityLocation, targetMarkets, industry, gate (declined, so none of the twelve gated sub-questions
-// are asked at all), enableByok -- the shortest real path to the final "run a scan now?" question.
-const BASE_ANSWERS = ["US", "", "", "n", "n"];
+// are asked at all) -- the shortest real path to the final "run a scan now?" question.
+const BASE_ANSWERS = ["US", "", "", "n"];
 
 describe("init: offer to run a scan at the end", () => {
   let dir: string;

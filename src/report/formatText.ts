@@ -2,7 +2,13 @@ import type { Finding, ScanResult } from "../engine/types.js";
 
 const BANNER_RULE = "=".repeat(72);
 
-export function formatText(result: ScanResult): string {
+export interface FormatTextOptions {
+  /** True when the config has AI-assisted review (tier: byok) turned on -- the hint about that
+   *  advanced option is only relevant when it isn't. */
+  aiReviewEnabled?: boolean;
+}
+
+export function formatText(result: ScanResult, options: FormatTextOptions = {}): string {
   const lines: string[] = [];
 
   if (result.unsupportedStackWarning) {
@@ -64,8 +70,13 @@ export function formatText(result: ScanResult): string {
     lines.push(`AI-assisted resolution: ${resolvedCount} resolved, ${declinedCount} declined (with a reason), ${stillUnresolvedCount} still unresolved.`);
   } else if (result.ambiguousCount > 0) {
     lines.push("");
+    const base = `${result.ambiguousCount} item(s) require deeper analysis before they can be included in a policy; review them manually.`;
+    // Only worth mentioning when the advanced option isn't already on, and only as a pointer -- it is
+    // opt-in (init --enable-ai-review, or a hand-edited config), not something to recommend to everyone.
     lines.push(
-      `${result.ambiguousCount} item(s) require deeper analysis before they can be included in a policy. Run "srclawyer scan" with the "byok" tier configured (bring your own Anthropic key) to attempt AI-assisted resolution, or resolve manually. A "managed" tier is planned but not yet available.`
+      options.aiReviewEnabled
+        ? base
+        : `${base} (Optional, advanced: AI-assisted resolution with your own Anthropic API key — see "AI-assisted review" in the README.)`
     );
   }
 

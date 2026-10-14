@@ -11,7 +11,7 @@ import {
   type SrcLawyerConfig,
   type SrcLawyerTier,
 } from "../config/config.js";
-import { NETWORK_CALLS_NOTICE } from "../policy/legalNotices.js";
+import { NETWORK_CALLS_NOTICE, byokNetworkNotice } from "../policy/legalNotices.js";
 import { runScan } from "./scan.js";
 
 export interface InitFlags {
@@ -28,6 +28,16 @@ export interface InitFlags {
   accountDeletionInstructions?: string;
   minimumAge?: number;
   sendsDataToAiServices?: boolean;
+  /** Advanced, opt-in: sets tier: byok. Never asked about in the default flow. */
+  enableAiReview?: boolean;
+  apiKeyEnvVar?: string;
+}
+
+export const DEFAULT_API_KEY_ENV_VAR = "ANTHROPIC_API_KEY";
+const ENV_VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export function isValidEnvVarName(name: string): boolean {
+  return ENV_VAR_NAME.test(name);
 }
 
 function guessIndustry(root: string): string | null {
@@ -190,20 +200,25 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
   // services as part of its own functionality) -- not about SrcLawyer's own, separately-documented
   // BYOK network calls described in NETWORK_CALLS_NOTICE above.
   const sendsDataToAiServices = await resolveField(flags.sendsDataToAiServices, gateYes, () =>
-    askYesNoOptional(lines, "Does this product send user data to third-party AI services (e.g. OpenAI, Anthropic) as part of its own functionality?")
+    askYesNoOptional(lines, "Does this product send user data to third-party AI services as part of its own functionality?")
   );
 
-  // "managed" is deliberately not offered here -- it's a real SrcLawyerTier value and config.ts/
-  // resolveProviderForTier.ts both still support it fully (a hand-edited config with tier: managed
-  // still gets a clear, accurate error at scan time), but there's no advertised path to it from this
-  // prompt, so a tester reading the choices here can't select a dead end during setup.
-  const enableByokRaw = await ask(lines, "Enable optional AI-assisted review with your own Anthropic key? (advanced)", "n");
-  const tier: SrcLawyerTier = /^y(es)?$/i.test(enableByokRaw.trim()) ? "byok" : "free";
+  // AI-assisted review (tier: byok) is an advanced opt-in, reached only via --enable-ai-review (or by
+  // hand-editing the config) -- the default flow never asks about it or mentions an API key. "managed"
+  // is likewise not offered here: it's still a real SrcLawyerTier value that config.ts and
+  // resolveProviderForTier.ts support, so a hand-edited tier: managed keeps its clear "not available
+  // yet" error at scan time, but nothing advertises a path to it.
+  const tier: SrcLawyerTier = flags.enableAiReview ? "byok" : "free";
   let apiKeyEnvVar: string | null = null;
 
   if (tier === "byok") {
-    apiKeyEnvVar = await ask(lines, "Which environment variable holds your Anthropic API key?", "ANTHROPIC_API_KEY");
+    apiKeyEnvVar = flags.apiKeyEnvVar ?? (await ask(lines, "Which environment variable holds your Anthropic API key?", DEFAULT_API_KEY_ENV_VAR));
+    if (!isValidEnvVarName(apiKeyEnvVar)) {
+      console.log(`\n"${apiKeyEnvVar}" is not a valid environment variable name; using ${DEFAULT_API_KEY_ENV_VAR} instead. Edit ${CONFIG_FILENAME} to change it.`);
+      apiKeyEnvVar = DEFAULT_API_KEY_ENV_VAR;
+    }
     console.log(`\nNote: only the name "${apiKeyEnvVar}" is written to ${CONFIG_FILENAME} — the key itself is never written to disk. It's read from your environment at scan time.`);
+    console.log(byokNetworkNotice(apiKeyEnvVar));
   }
 
   const config: SrcLawyerConfig = {
