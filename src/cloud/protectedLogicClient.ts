@@ -86,6 +86,23 @@ function chunkByCountAndBytes<T>(items: T[], maxCount: number, maxBytes: number)
   return batches;
 }
 
+/**
+ * The one place ids are assigned for anything sent to the Worker. Callers identify items by their own
+ * ids (finding ids embed file path, line and field name; Zod candidate ids ARE the file path), but
+ * those never leave this process: every item goes out under an opaque per-scan id (f0, f1, ... /
+ * c0, c1, ...), unique across all batches, and responses are mapped back here. The Worker only echoes
+ * ids (it never parses them), so nothing about the wire format depends on their shape.
+ */
+function toOpaque<T extends { id: string }>(items: T[], prefix: string): { wire: T[]; originalByOpaque: Map<string, string> } {
+  const originalByOpaque = new Map<string, string>();
+  const wire = items.map((item, i) => {
+    const opaque = `${prefix}${i}`;
+    originalByOpaque.set(opaque, item.id);
+    return { ...item, id: opaque };
+  });
+  return { wire, originalByOpaque };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -133,7 +150,8 @@ export async function scoreFields(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let error: string | null = null;
 
-  for (const batch of chunkByCountAndBytes(items, batchSize, batchMaxBytes)) {
+  const { wire, originalByOpaque } = toOpaque(items, "f");
+  for (const batch of chunkByCountAndBytes(wire, batchSize, batchMaxBytes)) {
     try {
       const response = await postJson<{ results: ScoreFieldsResult[] }>(
         `${options.baseUrl}/v1/score-fields`,
@@ -141,7 +159,10 @@ export async function scoreFields(
         { fields: batch },
         timeoutMs
       );
-      for (const result of response.results) results.set(result.id, result);
+      for (const result of response.results) {
+        const original = originalByOpaque.get(result.id);
+        if (original !== undefined) results.set(original, { ...result, id: original });
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
@@ -162,7 +183,8 @@ export async function detectZodSchemas(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let error: string | null = null;
 
-  for (const batch of chunkByCountAndBytes(items, batchSize, batchMaxBytes)) {
+  const { wire, originalByOpaque } = toOpaque(items, "c");
+  for (const batch of chunkByCountAndBytes(wire, batchSize, batchMaxBytes)) {
     try {
       const response = await postJson<{ results: DetectZodSchemaResult[] }>(
         `${options.baseUrl}/v1/detect-zod-schema`,
@@ -170,7 +192,10 @@ export async function detectZodSchemas(
         { candidates: batch },
         timeoutMs
       );
-      for (const result of response.results) results.set(result.id, result);
+      for (const result of response.results) {
+        const original = originalByOpaque.get(result.id);
+        if (original !== undefined) results.set(original, { ...result, id: original });
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }

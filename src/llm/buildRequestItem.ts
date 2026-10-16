@@ -8,10 +8,14 @@ import type { LlmRequestItem } from "./types.js";
  * they leave this function — LlmRequestItem has no raw-evidence field, so a
  * provider implementation is structurally incapable of receiving
  * unredacted content.
+ *
+ * `requestId` is an opaque per-scan identifier (f0, f1, ...), never finding.id: finding ids embed the
+ * file path, line number and field name, and none of those may reach the provider. The caller
+ * (resolveAmbiguousFindings) owns the mapping back to findings and never sends it anywhere.
  */
-export function buildRequestItem(finding: Finding, collectsChildrensData: boolean): LlmRequestItem {
+export function buildRequestItem(finding: Finding, collectsChildrensData: boolean, requestId: string): LlmRequestItem {
   return {
-    findingId: finding.id,
+    findingId: requestId,
     redactedEvidence: redactSecrets(finding.evidence),
     redactedDescription: redactSecrets(finding.description),
     dataCategories: finding.dataCategories,

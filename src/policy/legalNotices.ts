@@ -9,17 +9,20 @@
 export const PRIVACY_POLICY_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 export const TERMS_URL = "https://github.com/SrcLawyer/srclawyer#legal";
 
-// Mirrors README.md's own "Network calls" section (minus markdown backticks, since this prints to a
-// terminal, and minus its closing pointer to the optional AI-assisted review) -- one wording for this
-// claim, not a second paraphrase that can drift from the first.
+// Mirrors README.md's own "Network calls" section (condensed, minus markdown backticks since this
+// prints to a terminal) -- the same claims in the same terms, not a second paraphrase that can drift.
+// What is actually on the wire is pinned by tests/requestBodiesNoPaths.test.ts.
 export const NETWORK_CALLS_NOTICE = [
   "Heads up: SrcLawyer makes network calls.",
   "",
   "Detection itself is fully local and offline — no code leaves your machine for pattern matching.",
-  "Once detection completes, scan makes one batched network call to grade the confidence of what it",
-  "found (field names and derived yes/no signals only, never source code), and, for scans that use Zod",
-  "schemas as request validators, one additional call sending a small redacted code fragment. This runs",
-  "on every scan.",
+  "Once detection completes, every scan makes one batched call to grade the confidence of what it",
+  "found. For each field it sends an opaque id (f0, f1, ...), the data category the field's name maps",
+  "to, and three derived signals (is the name ambiguous, was it read directly from the request, how",
+  "many similar fields sit alongside it) -- no field names, file paths, line numbers or source code.",
+  "Scans that use Zod schemas as request validators make one additional batched call, sending an",
+  "opaque id and a small secret-redacted code fragment per schema (the schema, its validation call",
+  "and the imports it uses) -- never a file path or line number.",
   "",
   `Legal notice and disclaimer: ${PRIVACY_POLICY_URL}`,
   "(A dedicated privacy policy and terms of service are coming; this points to what exists today.)",
@@ -30,5 +33,5 @@ export const SCAN_DISCLAIMER_REMINDER =
 
 export function byokNetworkNotice(apiKeyEnvVar: string | null): string {
   const keySource = apiKeyEnvVar ? `env var ${apiKeyEnvVar}` : "your configured key";
-  return `BYOK is configured: redacted code snippets for ambiguous findings will be sent to Anthropic under your own API key (${keySource}), for AI-assisted classification only.`;
+  return `BYOK is configured: for each finding scan couldn't classify, it will send Anthropic, under your own API key (${keySource}), an opaque id, the finding's data category and description (which names the field), and the one source line it was found on with secrets redacted — not the file's path or line number, and no other code — for AI-assisted classification only.`;
 }

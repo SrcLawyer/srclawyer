@@ -69,7 +69,7 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
         if (config.tier === "byok" && config.llm) {
           console.log(byokNetworkNotice(config.llm.apiKeyEnvVar));
         }
-        console.log(`Sending ${ambiguous.length} ambiguous item(s) to ${provider.name}...`);
+        console.log(`Sending ${ambiguous.length} ambiguous item(s) to ${provider.name} (an opaque id, category, description and one redacted source line each)...`);
         const resolved = await resolveAmbiguousFindings(ambiguous, provider, {
           // Preserves today's exact override behavior bit-for-bit: a missing/legacy key already
           // behaved as false before collectsChildrensData became nullable. Only the generated

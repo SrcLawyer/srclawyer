@@ -67,7 +67,7 @@ describe("protectedLogicClient batching", () => {
     fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       callCount += 1;
       if (callCount === 1) return jsonResponse({ error: "overloaded" }, 503);
-      return jsonResponse({ results: [{ id: "a", confidence: "low", requiresReview: true }] });
+      return jsonResponse({ results: [{ id: "f0", confidence: "low", requiresReview: true }] });
     });
 
     const { results, error } = await scoreFields(
@@ -103,5 +103,66 @@ describe("protectedLogicClient batching", () => {
 
     expect(fetchSpy.mock.calls.length).toBe(1);
     expect(error).toContain("401");
+  });
+});
+
+describe("protectedLogicClient opaque ids", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
+  const scoreItem = (id: string): ScoreFieldsItem => ({ id, lexiconCategory: "email", ambiguousName: false, runtimeVerified: true, siblingConfidentCount: 1 });
+
+  it("score-fields: sends f0, f1, ... instead of the caller's ids, numbered across batches, and maps results back", async () => {
+    const callerIds = ["field:src/api/users/signup.ts:2:email", "field:src/api/users/signup.ts:2:notes", "field:src/lib/deep/er/file.ts:40:phone"];
+    const sentBodies: string[] = [];
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const raw = (init as RequestInit).body as string;
+      sentBodies.push(raw);
+      const body = JSON.parse(raw) as { fields: Array<{ id: string }> };
+      return jsonResponse({ results: body.fields.map((f) => ({ id: f.id, confidence: "high", requiresReview: false })) });
+    });
+
+    const { results, error } = await scoreFields(callerIds.map(scoreItem), { ...OPTIONS, batchSize: 2 });
+
+    expect(error).toBeNull();
+    expect(sentBodies).toHaveLength(2);
+    const sentIds = sentBodies.flatMap((raw) => (JSON.parse(raw) as { fields: Array<{ id: string }> }).fields.map((f) => f.id));
+    expect(sentIds).toEqual(["f0", "f1", "f2"]);
+    expect(sentBodies.join("")).not.toMatch(/src\/|\.ts|signup|field:/);
+    expect([...results.keys()]).toEqual(callerIds);
+    expect(results.get(callerIds[2])).toEqual({ id: callerIds[2], confidence: "high", requiresReview: false });
+  });
+
+  it("detect-zod-schema: sends c0, c1, ... instead of the file path, and maps results back to it", async () => {
+    const paths = ["src/actions/profile-actions.ts", "src/other/deep/schema.ts"];
+    let sent = "";
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      sent += (init as RequestInit).body as string;
+      const body = JSON.parse((init as RequestInit).body as string) as { candidates: Array<{ id: string }> };
+      return jsonResponse({ results: body.candidates.map((c) => ({ id: c.id, matched: true, fields: [{ name: "email", line: 2 }] })) });
+    });
+
+    const { results } = await detectZodSchemas(
+      paths.map((id) => ({ id, codeFragment: 'const s = z.object({ email: z.string() });' })),
+      OPTIONS
+    );
+
+    expect((JSON.parse(sent) as { candidates: Array<{ id: string }> }).candidates.map((c) => c.id)).toEqual(["c0", "c1"]);
+    expect(sent).not.toMatch(/src\/|profile-actions|\.ts"/);
+    expect(results.get(paths[0])?.matched).toBe(true);
+    expect(results.get(paths[1])?.id).toBe(paths[1]);
+  });
+
+  it("ignores a response id it never sent, rather than inventing a result for it", async () => {
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonResponse({ results: [{ id: "f0", confidence: "low", requiresReview: true }, { id: "f99", confidence: "high", requiresReview: false }, { id: "src/x.ts", confidence: "high", requiresReview: false }] })
+    );
+
+    const { results } = await scoreFields([scoreItem("field:a.ts:1:x")], OPTIONS);
+
+    expect([...results.keys()]).toEqual(["field:a.ts:1:x"]);
   });
 });

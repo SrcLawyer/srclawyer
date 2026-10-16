@@ -5,7 +5,7 @@ import type { Finding } from "../src/engine/types.js";
 
 function makeFinding(overrides: Partial<Finding>): Finding {
   return {
-    id: "f1",
+    id: "field:src/api/users/signup.ts:3:notes",
     dataCategories: ["generic_pii"],
     processor: null,
     description: "Request field \"notes\" collected; could not confidently classify.",
@@ -25,7 +25,7 @@ describe("resolveAmbiguousFindings", () => {
       evidence: 'const key = "sk_test_FAKEFAKEFAKEFAKEFAKEFAKE";',
       description: "Stripe key sk_test_FAKEFAKEFAKEFAKEFAKEFAKE found",
     });
-    const provider = new FakeLlmProvider([[{ findingId: "f1", outcome: "declined", reason: "not enough context" }]]);
+    const provider = new FakeLlmProvider([[{ findingId: "f0", outcome: "declined", reason: "not enough context" }]]);
 
     await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: false });
 
@@ -38,7 +38,7 @@ describe("resolveAmbiguousFindings", () => {
   it("propagates a resolved outcome with the model's category and description", async () => {
     const finding = makeFinding({ id: "f1" });
     const provider = new FakeLlmProvider([
-      [{ findingId: "f1", outcome: "resolved", reason: null, resolvedDataCategories: ["email"], resolvedDescription: "Collects an email address for notifications." }],
+      [{ findingId: "f0", outcome: "resolved", reason: null, resolvedDataCategories: ["email"], resolvedDescription: "Collects an email address for notifications." }],
     ]);
 
     const [result] = await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: false });
@@ -51,7 +51,7 @@ describe("resolveAmbiguousFindings", () => {
 
   it("propagates a declined outcome with its reason verbatim", async () => {
     const finding = makeFinding({ id: "f1" });
-    const provider = new FakeLlmProvider([[{ findingId: "f1", outcome: "declined", reason: "Ambiguous field name with no surrounding context." }]]);
+    const provider = new FakeLlmProvider([[{ findingId: "f0", outcome: "declined", reason: "Ambiguous field name with no surrounding context." }]]);
 
     const [result] = await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: false });
 
@@ -62,7 +62,7 @@ describe("resolveAmbiguousFindings", () => {
   it("forces a decline for high-stakes findings even when the model says resolved", async () => {
     const childCategoryFinding = makeFinding({ id: "f1", dataCategories: ["childrens_data"] });
     const provider = new FakeLlmProvider([
-      [{ findingId: "f1", outcome: "resolved", reason: null, resolvedDataCategories: ["childrens_data"], resolvedDescription: "Definitely a child's name." }],
+      [{ findingId: "f0", outcome: "resolved", reason: null, resolvedDataCategories: ["childrens_data"], resolvedDescription: "Definitely a child's name." }],
     ]);
 
     const [result] = await resolveAmbiguousFindings([childCategoryFinding], provider, { collectsChildrensData: false });
@@ -74,7 +74,7 @@ describe("resolveAmbiguousFindings", () => {
   it("forces a decline when config.collectsChildrensData is true, even for an unrelated category", async () => {
     const finding = makeFinding({ id: "f1", dataCategories: ["generic_pii"] });
     const provider = new FakeLlmProvider([
-      [{ findingId: "f1", outcome: "resolved", reason: null, resolvedDataCategories: ["name"], resolvedDescription: "A name field." }],
+      [{ findingId: "f0", outcome: "resolved", reason: null, resolvedDataCategories: ["name"], resolvedDescription: "A name field." }],
     ]);
 
     const [result] = await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: true });
@@ -94,7 +94,7 @@ describe("resolveAmbiguousFindings", () => {
 
   it("marks a finding unresolved when the model claims resolved but gives no recognized category", async () => {
     const finding = makeFinding({ id: "f1" });
-    const provider = new FakeLlmProvider([[{ findingId: "f1", outcome: "resolved", reason: null, resolvedDataCategories: ["not_a_real_category" as never], resolvedDescription: "x" }]]);
+    const provider = new FakeLlmProvider([[{ findingId: "f0", outcome: "resolved", reason: null, resolvedDataCategories: ["not_a_real_category" as never], resolvedDescription: "x" }]]);
 
     const [result] = await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: false });
 
@@ -117,7 +117,7 @@ describe("resolveAmbiguousFindings", () => {
     const finding = makeFinding({ id: "f1" });
     // FakeLlmProvider is typed to only allow "resolved" | "declined" responses,
     // enforced by LlmResponseItem — this test documents that guarantee.
-    const provider = new FakeLlmProvider([[{ findingId: "f1", outcome: "declined", reason: "test" }]]);
+    const provider = new FakeLlmProvider([[{ findingId: "f0", outcome: "declined", reason: "test" }]]);
 
     const [result] = await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: false });
 
@@ -125,11 +125,11 @@ describe("resolveAmbiguousFindings", () => {
   });
 
   it("splits more than batchSize findings into multiple resolveBatch calls", async () => {
-    const findings = Array.from({ length: 5 }, (_, i) => makeFinding({ id: `f${i}` }));
+    const findings = Array.from({ length: 5 }, (_, i) => makeFinding({ id: `field:src/deep/dir/file${i}.ts:${i + 10}:notes` }));
     const provider = new FakeLlmProvider([
-      findings.slice(0, 2).map((f) => ({ findingId: f.id, outcome: "declined" as const, reason: "batch1" })),
-      findings.slice(2, 4).map((f) => ({ findingId: f.id, outcome: "declined" as const, reason: "batch2" })),
-      findings.slice(4, 5).map((f) => ({ findingId: f.id, outcome: "declined" as const, reason: "batch3" })),
+      [0, 1].map((i) => ({ findingId: `f${i}`, outcome: "declined" as const, reason: "batch1" })),
+      [2, 3].map((i) => ({ findingId: `f${i}`, outcome: "declined" as const, reason: "batch2" })),
+      [4].map((i) => ({ findingId: `f${i}`, outcome: "declined" as const, reason: "batch3" })),
     ]);
 
     const results = await resolveAmbiguousFindings(findings, provider, { collectsChildrensData: false, batchSize: 2 });
@@ -140,10 +140,40 @@ describe("resolveAmbiguousFindings", () => {
 
   it("does not mutate the input findings array", async () => {
     const finding = makeFinding({ id: "f1" });
-    const provider = new FakeLlmProvider([[{ findingId: "f1", outcome: "declined", reason: "x" }]]);
+    const provider = new FakeLlmProvider([[{ findingId: "f0", outcome: "declined", reason: "x" }]]);
 
     await resolveAmbiguousFindings([finding], provider, { collectsChildrensData: false });
 
     expect(finding.llmResolution).toBeUndefined();
+  });
+
+  it("sends only opaque per-scan ids -- never the finding id, with its path, line number and field name -- and numbers them across batches", async () => {
+    const findings = Array.from({ length: 5 }, (_, i) => makeFinding({ id: `field:src/deep/dir/file${i}.ts:${i + 10}:notes` }));
+    const provider = new FakeLlmProvider([
+      [0, 1].map((i) => ({ findingId: `f${i}`, outcome: "declined" as const, reason: "x" })),
+      [2, 3].map((i) => ({ findingId: `f${i}`, outcome: "declined" as const, reason: "x" })),
+      [4].map((i) => ({ findingId: `f${i}`, outcome: "declined" as const, reason: "x" })),
+    ]);
+
+    await resolveAmbiguousFindings(findings, provider, { collectsChildrensData: false, batchSize: 2 });
+
+    const sentIds = provider.requests.flatMap((r) => r.items.map((item) => item.findingId));
+    expect(sentIds).toEqual(["f0", "f1", "f2", "f3", "f4"]);
+    expect(JSON.stringify(provider.requests)).not.toMatch(/src\/|\.ts|file\d|field:/);
+  });
+
+  it("maps each response back to the right finding even when the model returns them out of order", async () => {
+    const findings = [makeFinding({ id: "field:a.ts:1:one" }), makeFinding({ id: "field:b.ts:2:two" })];
+    const provider = new FakeLlmProvider([
+      [
+        { findingId: "f1", outcome: "declined", reason: "second" },
+        { findingId: "f0", outcome: "declined", reason: "first" },
+      ],
+    ]);
+
+    const results = await resolveAmbiguousFindings(findings, provider, { collectsChildrensData: false });
+
+    expect(results[0].llmResolution?.reason).toBe("first");
+    expect(results[1].llmResolution?.reason).toBe("second");
   });
 });

@@ -21,8 +21,12 @@ export async function resolveAmbiguousFindings(
   const batches = chunkFindings(findings, options.batchSize ?? DEFAULT_BATCH_SIZE);
   const resolvedById = new Map<string, LlmResolution>();
 
+  // Opaque per-scan ids (f0, f1, ...), unique across all batches. Finding ids embed file paths and
+  // line numbers, so only these ever go on the wire; the mapping back lives here and nowhere else.
+  const requestIdOf = new Map<Finding, string>(findings.map((finding, i) => [finding, `f${i}`]));
+
   for (const batch of batches) {
-    const items = batch.map((finding) => buildRequestItem(finding, options.collectsChildrensData));
+    const items = batch.map((finding) => buildRequestItem(finding, options.collectsChildrensData, requestIdOf.get(finding)!));
     const isHighStakesById = new Map(items.map((item) => [item.findingId, item.isHighStakes]));
 
     let responses: LlmResponseItem[];
@@ -44,8 +48,9 @@ export async function resolveAmbiguousFindings(
     const responseById = new Map(responses.map((response) => [response.findingId, response]));
 
     for (const finding of batch) {
-      const response = responseById.get(finding.id);
-      const isHighStakes = isHighStakesById.get(finding.id) ?? false;
+      const requestId = requestIdOf.get(finding)!;
+      const response = responseById.get(requestId);
+      const isHighStakes = isHighStakesById.get(requestId) ?? false;
       resolvedById.set(finding.id, toResolution(response, isHighStakes, provider));
     }
   }

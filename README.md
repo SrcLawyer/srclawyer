@@ -95,7 +95,7 @@ Every finding traces back to a file and line (`src/engine/types.ts#Finding`).
 
 ## AI-assisted review (advanced)
 
-Off by default, and not part of `init`'s questions. `scan` already surfaces anything it can't confidently classify under "Items Requiring Manual Review"; with AI-assisted review enabled it first sends a redacted snippet of each such item to Anthropic, under **your own API key**, and tries to classify it. Items the model declines stay in the manual-review list, and items involving children's data are never auto-resolved.
+Off by default, and not part of `init`'s questions. `scan` already surfaces anything it can't confidently classify under "Items Requiring Manual Review"; with AI-assisted review enabled it first asks Anthropic, under **your own API key**, to classify each such item. For each item Anthropic receives: an opaque per-scan id, the item's data category, its short description (which names the field), and the one source line it was found on with secrets redacted — plus a fixed instruction prompt and the model name. **Not sent:** the file's path, its line number, or any surrounding code (the source line itself goes as written, apart from redacted secrets). Items the model declines stay in the manual-review list, and items involving children's data are never auto-resolved.
 
 Enable it when creating the config:
 
@@ -119,7 +119,12 @@ Only the variable's *name* is stored in the config — the key itself is never w
 
 ## Network calls
 
-Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, `scan` makes one batched network call to grade the confidence of what it found (field names and derived yes/no signals only, never source code), and, for scans that use Zod schemas as request validators, one additional call sending a small redacted code fragment. This runs on every scan, with or without the optional [AI-assisted review](#ai-assisted-review-advanced) described above, and is separate from it. See `PRODUCT_SPEC.md`'s "Static Analysis Depth" section for the precise wording.
+Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, every `scan` makes these calls to a SrcLawyer-run service:
+
+- **Confidence grading** (one batched call). For each detected field: an opaque per-scan id (`f0`, `f1`, …), the data category its name maps to (e.g. `email`), and three derived signals — whether the name is ambiguous, whether it was read directly from the request in code (rather than inferred from a type), and how many confidently classified fields sit alongside it. **Not sent:** the field's name, file paths, line numbers, or source code.
+- **Zod-schema detection** (one more batched call, only for scans where Zod schemas appear to validate request data). Per schema: an opaque id (`c0`, `c1`, …) and a small, secret-redacted code fragment — the schema, the call that validates with it, and the imports it uses, as source text (so it includes the schema's field names and those import specifiers). **Not sent:** the schema's file path or line number.
+
+Ids are numbered per scan; the mapping back to files and lines never leaves your machine. Requests carry a shared API key (`x-api-key`) and the standard headers Node.js adds (such as `user-agent: node`); there is no install ID, machine information, or telemetry. These calls run on every scan, with or without the optional [AI-assisted review](#ai-assisted-review-advanced), and are separate from it. See `PRODUCT_SPEC.md`'s "Static Analysis Depth" section for the same wording.
 
 ## Secret handling
 
