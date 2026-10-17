@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Command, CommanderError } from "commander";
 import { isValidEnvVarName, runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
+import { runCheck } from "./commands/check.js";
+import { DEFAULT_INVENTORY_PATH } from "./inventory/inventory.js";
 import { EXIT_CRASH } from "./exitCodes.js";
+import { readPackageVersion } from "./version.js";
 
 // Read from package.json rather than hardcoding, so --version can't silently drift out of sync with
 // the published version the way a literal string did through every prior release.
-const HERE = dirname(fileURLToPath(import.meta.url));
-const { version } = JSON.parse(readFileSync(join(HERE, "../package.json"), "utf8")) as { version: string };
+const version = readPackageVersion();
 
 const program = new Command();
 
@@ -106,8 +105,30 @@ program
   .option("--json", "output findings as JSON", false)
   .option("--out <path>", "path to write the generated privacy policy", "PRIVACY_POLICY.md")
   .option("--no-llm", "skip AI-assisted resolution of ambiguous findings for this run")
-  .action(async (opts: { json: boolean; out: string; llm: boolean }) => {
-    await runScan(process.cwd(), { json: opts.json, out: opts.out, llm: opts.llm });
+  .option(
+    "--write-inventory [path]",
+    `also write the drift baseline (data categories and processors only) to <path> (default ${DEFAULT_INVENTORY_PATH}); uses git-aware file discovery in a git repository`
+  )
+  .option("--allow-incomplete-inventory", "with --write-inventory: write the baseline even if the scan completed with warnings")
+  .action(async (opts: { json: boolean; out: string; llm: boolean; writeInventory?: string | true; allowIncompleteInventory?: boolean }) => {
+    await runScan(process.cwd(), {
+      json: opts.json,
+      out: opts.out,
+      llm: opts.llm,
+      writeInventory: opts.writeInventory === true ? DEFAULT_INVENTORY_PATH : opts.writeInventory,
+      allowIncompleteInventory: opts.allowIncompleteInventory,
+    });
+  });
+
+program
+  .command("check")
+  .description("Check for drift: compare the code's data categories and processors with the committed baseline (exit 0 no drift, 1 drift, 2 error, 3 inconclusive)")
+  .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
+  .option("--format <format>", "text or json", "text")
+  .action(async (opts: { inventory: string; format: string }) => {
+    const format = opts.format;
+    if (format !== "text" && format !== "json") return program.error(`error: --format must be "text" or "json" (got "${format}")`);
+    process.exitCode = await runCheck(process.cwd(), { inventoryPath: opts.inventory, format });
   });
 
 // Exit 1 is reserved for "completed with warnings" (scan) and "drift" (check), so anything that ends

@@ -131,8 +131,14 @@ async function runPythonCodeRules(filePath: string, source: string, root: string
  * rather than folded into it. Anyone auditing "does this touch the network" can still answer that by
  * reading this file alone.
  */
-export async function scan(root: string): Promise<ScanResult> {
+export interface ScanEngineOptions {
+  /** Absolute paths discovery is restricted to (git mode, for the drift baseline); unset = ordinary discovery. */
+  onlyFiles?: Set<string> | null;
+}
+
+export async function scan(root: string, options: ScanEngineOptions = {}): Promise<ScanResult> {
   const boundary = new RootBoundary(root);
+  boundary.restrictDiscoveryTo(options.onlyFiles ?? null);
   const [{ projects, workspaceWarning }, unsupportedStackWarning] = await Promise.all([
     discoverProjects(root, boundary),
     detectUnsupportedStack(root, boundary),

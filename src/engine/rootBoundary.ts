@@ -18,6 +18,9 @@ export class RootBoundary {
   // through an in-root directory loop is the same link, counted once.
   private readonly blocked = new Map<string, string>();
   private readonly resolved = new Map<string, string | null>();
+  // When set, discovery only keeps files in this set (absolute paths) -- see gitDiscovery.ts. It lives
+  // here only because this object is already threaded through every glob call.
+  private discoveryFilter: Set<string> | null = null;
 
   constructor(readonly root: string) {
     try {
@@ -25,6 +28,14 @@ export class RootBoundary {
     } catch {
       this.realRoot = resolve(root);
     }
+  }
+
+  restrictDiscoveryTo(files: Set<string> | null): void {
+    this.discoveryFilter = files;
+  }
+
+  keepsInDiscovery(absolutePath: string): boolean {
+    return this.discoveryFilter === null || this.discoveryFilter.has(absolutePath);
   }
 
   isInsideRealPath(resolved: string): boolean {

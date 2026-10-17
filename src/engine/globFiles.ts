@@ -1,4 +1,5 @@
 import { glob } from "tinyglobby";
+import { resolve } from "node:path";
 import type { RootBoundary } from "./rootBoundary.js";
 
 export interface GlobFilesOptions {
@@ -19,5 +20,8 @@ export interface GlobFilesOptions {
 // traversal order, which neither fast-glob nor tinyglobby guarantees.
 export async function globFiles(patterns: string | string[], options: GlobFilesOptions): Promise<string[]> {
   const { boundary, ...globOptions } = options;
-  return (await glob(patterns, { expandDirectories: false, ...globOptions, ...(boundary ? { fs: boundary.globFs() } : {}) })).sort();
+  const found = (await glob(patterns, { expandDirectories: false, ...globOptions, ...(boundary ? { fs: boundary.globFs() } : {}) })).sort();
+  // An optional discovery restriction (git mode) is an intersection with the normal glob, so every
+  // ignore pattern and the symlink boundary above still apply unchanged.
+  return boundary ? found.filter((p) => boundary.keepsInDiscovery(resolve(options.cwd, p))) : found;
 }

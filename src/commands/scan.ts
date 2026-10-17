@@ -6,8 +6,10 @@ import { formatText } from "../report/formatText.js";
 import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
 import { resolveProviderForTier } from "../llm/resolveProviderForTier.js";
 import { resolveAmbiguousFindings } from "../llm/resolveAmbiguousFindings.js";
-import { resolveProtectedLogic } from "../cloud/resolveProtectedLogic.js";
-import { resolveProtectedLogicEndpoint } from "../cloud/config.js";
+import { resolveScanProtectedLogic } from "./protectedLogicStep.js";
+import { selectDiscovery } from "../engine/gitDiscovery.js";
+import { computeInventory, inventoryBlockers, serializeInventory } from "../inventory/inventory.js";
+import { readPackageVersion } from "../version.js";
 import { MAX_FRAGMENT_BYTES } from "../rules/zodPreFilter.js";
 import { SCAN_DISCLAIMER_REMINDER, byokNetworkNotice } from "../policy/legalNotices.js";
 import type { Finding } from "../engine/types.js";
@@ -16,6 +18,11 @@ export interface ScanOptions {
   json: boolean;
   out: string;
   llm: boolean;
+  /** Write the drift baseline to this path (relative to root). With this set the scan uses the shared
+   *  git-aware discovery mode (see gitDiscovery.ts) for the policy as well, so the two always agree. */
+  writeInventory?: string;
+  /** Write the baseline even if the scan completed with warnings that make it untrustworthy. */
+  allowIncompleteInventory?: boolean;
 }
 
 export async function runScan(root: string, options: ScanOptions): Promise<void> {
@@ -30,7 +37,8 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
     }
   }
 
-  const result = await scan(root);
+  const discovery = options.writeInventory ? selectDiscovery(root) : null;
+  const result = await scan(root, { onlyFiles: discovery?.files ?? null });
   let findings: Finding[] = result.findings;
 
   if (result.workspaceWarning) console.error(result.workspaceWarning);
@@ -41,20 +49,10 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
     console.error(`Largest Zod-schema fragment this scan: ${result.maxZodFragmentBytes} bytes (hard ceiling: ${MAX_FRAGMENT_BYTES} bytes).`);
   }
 
-  // Not tier-gated, not behind --no-llm: confidence scoring and Zod-schema detection are Layer 1
-  // capabilities now, needed on every real scan regardless of which LLM tier (if any) is configured.
-  // A failure here degrades honestly (findings keep their safe local fallback) rather than blocking
-  // the scan — see resolveProtectedLogic's own per-call error handling.
-  const hasScorableFindings =
-    findings.some((f) => f.confidenceFactors) || result.pendingZodCandidates.length > 0 || result.oversizedZodFiles.length > 0;
-  let protectedLogicWarning: string | null = null;
-  if (hasScorableFindings) {
-    const endpoint = resolveProtectedLogicEndpoint();
-    const resolved = await resolveProtectedLogic(findings, result.pendingZodCandidates, endpoint, result.oversizedZodFiles);
-    findings = resolved.findings;
-    protectedLogicWarning = resolved.warning;
-    if (protectedLogicWarning) console.error(protectedLogicWarning);
-  }
+  const protectedLogic = await resolveScanProtectedLogic(result);
+  findings = protectedLogic.findings;
+  const protectedLogicWarning = protectedLogic.warning;
+  if (protectedLogicWarning) console.error(protectedLogicWarning);
 
   let llmError: string | null = null;
 
@@ -88,12 +86,27 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   const policyPath = resolve(root, options.out);
   writeFileSync(policyPath, generatePolicyMarkdown(finalResult, config, llmError, protectedLogicWarning));
 
+  let inventoryNote: string | null = null;
+  if (options.writeInventory && discovery) {
+    const blockers = inventoryBlockers(result, protectedLogicWarning);
+    if (blockers.length > 0 && !options.allowIncompleteInventory) {
+      inventoryNote = `Inventory not written: this scan completed with warnings (see above), so its categories may be incomplete and would read as drift later. Fix them and re-run, or pass --allow-incomplete-inventory to write it anyway.`;
+      console.error(inventoryNote);
+    } else {
+      const inventory = computeInventory(finalResult.findings, { srclawyerVersion: readPackageVersion(), discovery: discovery.mode });
+      writeFileSync(resolve(root, options.writeInventory), serializeInventory(inventory));
+      inventoryNote = `Wrote the drift baseline to ${options.writeInventory} (${inventory.categories.length} categories, ${inventory.processors.length} processors; ${discovery.mode} discovery). Commit it, then run "srclawyer check" in CI.`;
+      if (discovery.mode === "glob") inventoryNote += ` (${discovery.reason}; the baseline records the ordinary filesystem walk.)`;
+      console.error(inventoryNote);
+    }
+  }
+
   if (result.unsupportedStackWarning || result.workspaceWarning || result.skippedFilesWarning || llmError || protectedLogicWarning || legacyConfigWarning) {
     process.exitCode = 1;
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ ...finalResult, policyPath, llmError, protectedLogicWarning, legacyConfigWarning }, null, 2));
+    console.log(JSON.stringify({ ...finalResult, policyPath, llmError, protectedLogicWarning, legacyConfigWarning, inventoryNote }, null, 2));
     return;
   }
 
