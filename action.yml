@@ -1,0 +1,68 @@
+name: SrcLawyer drift check
+description: >-
+  Fails when the data categories or third-party processors in your code drift from the committed
+  SrcLawyer inventory baseline, so the privacy policy can't silently fall out of date. Free during the beta.
+
+inputs:
+  srclawyer-version:
+    description: >-
+      The SrcLawyer CLI to run, pinned: an exact version (for example 0.7.0), or
+      github:SrcLawyer/srclawyer#<40-character commit sha>. latest, ranges and branch names are rejected.
+    required: true
+  inventory-path:
+    description: Path to the committed baseline, relative to `path`.
+    required: false
+    default: .srclawyer.inventory.json
+  path:
+    description: The directory to check (the repository root by default).
+    required: false
+    default: "."
+  fail-on-drift:
+    description: Fail the step when drift is detected. When false, drift is reported as a warning.
+    required: false
+    default: "true"
+  fail-on-inconclusive:
+    description: >-
+      Fail the step when no verdict could be reached (Worker unreachable, skipped files, ...). When false
+      (the default), that is reported as a warning only.
+    required: false
+    default: "false"
+  pr-comment:
+    description: >-
+      Post (and keep updated) one comment on the pull request. Needs `pull-requests: write`; skipped on
+      pull requests from forks.
+    required: false
+    default: "false"
+  github-token:
+    description: Token used only for the optional pull request comment.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  result:
+    description: One of no-drift, drift, inconclusive, error.
+    value: ${{ steps.check.outputs.result }}
+  added:
+    description: Comma-separated additions, as category:<name> and processor:<name>.
+    value: ${{ steps.check.outputs.added }}
+  removed:
+    description: Comma-separated removals, as category:<name> and processor:<name>.
+    value: ${{ steps.check.outputs.removed }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: "22"
+    - id: check
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/action/run.mjs"
+      env:
+        INPUT_SRCLAWYER_VERSION: ${{ inputs.srclawyer-version }}
+        INPUT_INVENTORY_PATH: ${{ inputs.inventory-path }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON_DRIFT: ${{ inputs.fail-on-drift }}
+        INPUT_FAIL_ON_INCONCLUSIVE: ${{ inputs.fail-on-inconclusive }}
+        INPUT_PR_COMMENT: ${{ inputs.pr-comment }}
+        INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
