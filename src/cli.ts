@@ -2,9 +2,10 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import { isValidEnvVarName, runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
+import { EXIT_CRASH } from "./exitCodes.js";
 
 // Read from package.json rather than hardcoding, so --version can't silently drift out of sync with
 // the published version the way a literal string did through every prior release.
@@ -12,6 +13,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const { version } = JSON.parse(readFileSync(join(HERE, "../package.json"), "utf8")) as { version: string };
 
 const program = new Command();
+
+// Commander normally calls process.exit(1) itself on a usage error; exit codes are this CLI's contract
+// (see exitCodes.ts), so it throws instead and the handler at the bottom decides the code.
+program.exitOverride();
 
 program
   .name("srclawyer")
@@ -105,4 +110,21 @@ program
     await runScan(process.cwd(), { json: opts.json, out: opts.out, llm: opts.llm });
   });
 
-program.parseAsync(process.argv);
+// Exit 1 is reserved for "completed with warnings" (scan) and "drift" (check), so anything that ends
+// the run abnormally -- an uncaught error, an unhandled rejection, a usage error -- exits 2.
+function crash(error: unknown): never {
+  console.error(error instanceof Error ? (error.stack ?? error.message) : String(error));
+  process.exit(EXIT_CRASH);
+}
+
+process.on("uncaughtException", crash);
+process.on("unhandledRejection", crash);
+
+program.parseAsync(process.argv).catch((error: unknown) => {
+  if (error instanceof CommanderError) {
+    // Help and --version also arrive here, with exitCode 0; commander has already printed its message.
+    process.exitCode = error.exitCode === 0 ? 0 : EXIT_CRASH;
+    return;
+  }
+  crash(error);
+});
