@@ -117,6 +117,33 @@ llm:
 
 Only the variable's *name* is stored in the config — the key itself is never written to disk. When it's enabled, `scan` prints a notice that redacted snippets are being sent to Anthropic; `scan --no-llm` skips it for a single run. A hosted tier, where SrcLawyer supplies the model access and no key is needed, is planned but not yet available: a config with `tier: managed` gets a clear "not available yet" error rather than silently doing nothing.
 
+## Drift check (GitHub Action)
+
+**Free during the beta.** Flags when your code starts collecting a new kind of data, or using a new third-party processor, that your privacy policy was never updated for. It compares the code against a committed baseline, `.srclawyer.inventory.json` — just the sorted data categories and processors, no file names or line numbers — not against policy text, which people edit by hand.
+
+```bash
+npx srclawyer scan --write-inventory     # once: writes the policy and the baseline; commit the baseline
+npx srclawyer check                      # exit 0 no drift, 1 drift, 2 error, 3 inconclusive
+```
+
+```yaml
+- uses: actions/checkout@v7
+- uses: SrcLawyer/srclawyer@v0.7.0
+  with:
+    srclawyer-version: 0.7.0             # required and pinned
+```
+
+Drift fails the check, and the step summary lists what was added and removed with a one-line fix. If no verdict can be reached — the confidence service is unreachable, files were skipped, or the baseline and the run used different file discovery — the result is **inconclusive**, a warning by default, and is never reported as drift. The Action needs no secrets and `contents: read`; an optional pull-request comment needs `pull-requests: write`. Inside a git repository, `check` and `--write-inventory` look only at tracked and untracked-but-not-ignored files, so a gitignored build directory can't cause phantom drift; plain `scan` is unchanged. `check` makes the same network calls as `scan` (below) and never calls an AI provider.
+
+| Exit code | `srclawyer check` | `srclawyer scan` |
+|---|---|---|
+| 0 | no drift | clean |
+| 1 | drift | completed with warnings |
+| 2 | crash, bad usage, or a missing or invalid baseline | crash or bad usage |
+| 3 | inconclusive | — |
+
+`scan`'s "completed with warnings" (1) and `check`'s "inconclusive" (3) are the same condition under different numbers; `scan`'s was left alone so existing scripts keep working. Example workflows (pull requests, a weekly schedule, manual dispatch, writing the baseline on the runner) are in [docs/github-action.md](docs/github-action.md).
+
 ## Network calls
 
 Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, every `scan` makes these calls to a SrcLawyer-run service:
