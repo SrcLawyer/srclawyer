@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   CONFIG_FILENAME,
@@ -12,6 +12,7 @@ import {
   type SrcLawyerTier,
 } from "../config/config.js";
 import { NETWORK_CALLS_NOTICE, byokNetworkNotice } from "../policy/legalNotices.js";
+import { DEFAULT_POLICY_PATH, SUGGESTED_DRAFT_PATH, checkPolicyWrite } from "../policy/policyGuard.js";
 import { runScan } from "./scan.js";
 
 export interface InitFlags {
@@ -246,14 +247,21 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
 
   let runScanNow = false;
   if (isInteractive) {
-    const raw = await ask(lines, "Run a scan now and generate your policy?", "y");
-    runScanNow = /^y(es)?$/i.test(raw.trim());
+    // init never overwrites an existing policy. If one is there and scan would refuse to replace it,
+    // don't offer the scan at all; show how to generate a draft next to it instead.
+    const existing = checkPolicyWrite(resolve(root, DEFAULT_POLICY_PATH), DEFAULT_POLICY_PATH, false);
+    if (existing.allowed) {
+      const raw = await ask(lines, "Run a scan now and generate your policy?", "y");
+      runScanNow = /^y(es)?$/i.test(raw.trim());
+    } else {
+      console.log(`\n${DEFAULT_POLICY_PATH} already exists and SrcLawyer will not overwrite it, so no scan was run. To generate a policy to compare against it, run:\n\n  srclawyer scan --out ${SUGGESTED_DRAFT_PATH}`);
+    }
   }
 
   rl.close();
 
   if (runScanNow) {
     console.log("");
-    await runScan(root, { json: false, out: "PRIVACY_POLICY.md", llm: true });
+    await runScan(root, { json: false, out: DEFAULT_POLICY_PATH, llm: true });
   }
 }
