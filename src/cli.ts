@@ -2,6 +2,7 @@
 import { Command, CommanderError } from "commander";
 import { isValidEnvVarName, runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
+import { runUpdate } from "./commands/update.js";
 import { runCheck } from "./commands/check.js";
 import { DEFAULT_INVENTORY_PATH } from "./inventory/inventory.js";
 import { EXIT_CRASH } from "./exitCodes.js";
@@ -131,6 +132,18 @@ program
     const format = opts.format;
     if (format !== "text" && format !== "json") return program.error(`error: --format must be "text" or "json" (got "${format}")`);
     process.exitCode = await runCheck(process.cwd(), { inventoryPath: opts.inventory, format });
+  });
+
+program
+  .command("update")
+  .description("On drift, write a draft policy and a review file next to (never over) your policy and baseline (exit 0 no new items, 1 new items found, 2 error, 3 inconclusive)")
+  .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
+  .option("--out-dir <dir>", "where to write PRIVACY_POLICY.generated.md and PRIVACY_POLICY.review.md", ".")
+  .option("--format <format>", "text or json", "text")
+  .action(async (opts: { inventory: string; outDir: string; format: string }) => {
+    const format = opts.format;
+    if (format !== "text" && format !== "json") return program.error(`error: --format must be "text" or "json" (got "${format}")`);
+    process.exitCode = await runUpdate(process.cwd(), { inventoryPath: opts.inventory, outDir: opts.outDir, format });
   });
 
 // Exit 1 is reserved for "completed with warnings" (scan) and "drift" (check), so anything that ends

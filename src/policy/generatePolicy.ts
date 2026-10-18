@@ -410,3 +410,20 @@ export function generatePolicyMarkdown(
 
   return parts.join("\n") + "\n";
 }
+
+/**
+ * The blank labels in a generated policy, read from its "Placeholders — Complete Before Publishing"
+ * summary (one bullet per unique blank). Empty when every field was answered.
+ */
+export function extractPlaceholders(markdown: string): string[] {
+  const start = markdown.indexOf("## Placeholders — Complete Before Publishing");
+  if (start === -1) return [];
+  const rest = markdown.slice(start).split("\n").slice(2);
+  const labels: string[] = [];
+  for (const line of rest) {
+    const match = /^- \[TO COMPLETE: (.*)\]$/.exec(line);
+    if (!match) break;
+    labels.push(match[1]!);
+  }
+  return labels;
+}
