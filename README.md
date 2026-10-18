@@ -4,7 +4,7 @@ Static analysis engine that derives privacy policy documentation directly from s
 
 > **Beta.** The CLI (`init`, `scan`), the Layer 1 static analysis engine, and markdown privacy policy generation all work today. JavaScript/TypeScript (Express, Next.js) is the most tested path; Python (Flask) is newer, with FastAPI and Django explicitly detected and flagged as unsupported rather than silently skipped — see [Supported languages and frameworks](#supported-languages-and-frameworks) and [Known gaps](#known-gaps) below. Optional AI-assisted review of ambiguous findings (Layer 2) is available as an advanced option with your own Anthropic API key — see [AI-assisted review](#ai-assisted-review-advanced) below; a hosted tier that needs no key is planned but not yet available.
 >
-> Scanning is manual-only (`srclawyer scan`, run on demand) — this is the free/solo tier's permanent behavior, not a placeholder. Automatic CI/CD updating (a scan that runs itself on every PR, or on a schedule) isn't available yet; it's scoped for a future paid/team tier. See `PRODUCT_SPEC.md` Section 8.5 for the plan.
+> SrcLawyer runs when you ask it to: `scan` and `update` on your machine, `check` locally or in CI, and the GitHub Action's drift check on pull requests and on a schedule. All of this is free during the beta.
 
 ## Usage
 
@@ -24,6 +24,7 @@ srclawyer scan                  # analyze the codebase and write PRIVACY_POLICY.
 srclawyer scan --json           # findings as JSON (still writes the policy file)
 srclawyer scan --out docs/privacy.md
 srclawyer scan --force          # overwrite the policy even if it was edited (see below)
+srclawyer update                # after a change: write a draft policy and a review file, never touching your policy
 ```
 
 If `srclawyer` isn't found right after a global install, see [Troubleshooting: command not found](#troubleshooting-command-not-found) below.
@@ -162,9 +163,9 @@ npx srclawyer check                      # exit 0 no drift, 1 drift, 2 error, 3 
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: SrcLawyer/srclawyer@v0.8.0
+- uses: SrcLawyer/srclawyer@v0.9.0
   with:
-    srclawyer-version: 0.8.0             # required and pinned
+    srclawyer-version: 0.9.0             # required and pinned
 ```
 
 Drift fails the check, and the step summary lists what was added and removed with a one-line fix. If no verdict can be reached — the confidence service is unreachable, files were skipped, or the baseline and the run used different file discovery — the result is **inconclusive**, a warning by default, and is never reported as drift. The Action needs no secrets and `contents: read`; an optional pull-request comment needs `pull-requests: write`. Inside a git repository, `check` and `--write-inventory` look only at tracked and untracked-but-not-ignored files, so a gitignored build directory can't cause phantom drift; plain `scan` is unchanged. `check` makes the same network calls as `scan` (below) and never calls an AI provider.
@@ -180,10 +181,11 @@ Drift fails the check, and the step summary lists what was added and removed wit
 
 ## Removing SrcLawyer
 
-SrcLawyer writes at most three files into your project, and only when you ask it to:
+SrcLawyer writes only these files into your project, and only when you ask it to:
 
 - `.srclawyer.config.yml`, written by `srclawyer init`.
 - `PRIVACY_POLICY.md`, written by `srclawyer scan` (or the path you give `--out`) unless that file has been edited, in which case [it is left alone](#editing-the-generated-policy).
+- `PRIVACY_POLICY.generated.md` and `PRIVACY_POLICY.review.md`, written by `srclawyer update` when it finds new items (in the folder you pass to `--out-dir`, by default the project root).
 - `.srclawyer.inventory.json`, written only when you pass `--write-inventory` to `scan` (or the path you give it).
 
 Delete whichever of them you no longer want. No other SrcLawyer command writes files: `srclawyer check` is read-only, and installing the package writes nothing to your project.
@@ -195,6 +197,17 @@ To remove the command-line tool:
 ```bash
 npm uninstall -g srclawyer
 ```
+
+## Draft and review file (`srclawyer update`)
+
+`srclawyer update` runs the same scan and comparison as `check`. When it finds new items it writes two files next to your policy and changes nothing else:
+
+- `PRIVACY_POLICY.generated.md`: the policy `scan` would write now, for you to compare with yours.
+- `PRIVACY_POLICY.review.md`: a short plain-English list of what changed (new kinds of data, new services, things no longer found), suggested wording for each new item, and the questions the change raises (for example, whether your app now sends data to an AI service). It contains no file names, line numbers or dates.
+
+It never touches `PRIVACY_POLICY.md`, `.srclawyer.inventory.json` or `.srclawyer.config.yml`, and never calls an AI provider. Both files carry the same end marker as the policy, so a fresh `update` replaces them cleanly, and an edited copy is left alone. Exit codes are `check`'s: 0 nothing new, 1 new items found, 2 error, 3 inconclusive. Use `--out-dir <dir>` to write the files elsewhere.
+
+`scan`, `check` and `update` each print one **coverage** line saying what the scan covered (languages and frameworks, how many files, how many known third-party services) and what it did not. A clean result means **no new items found by the scanner since your last approved review**; it is not a statement that your product or your policy is compliant.
 
 ## Network calls
 

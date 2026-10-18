@@ -9,7 +9,7 @@ It compares the code against a committed **baseline** (`.srclawyer.inventory.jso
 ## One-time setup
 
 ```bash
-npx srclawyer@0.8.0 scan --write-inventory     # writes .srclawyer.inventory.json, and PRIVACY_POLICY.md unless an edited one is there
+npx srclawyer@0.9.0 scan --write-inventory     # writes .srclawyer.inventory.json, and PRIVACY_POLICY.md unless an edited one is there
 git add .srclawyer.inventory.json && git commit -m "Add SrcLawyer baseline"
 ```
 
@@ -21,9 +21,9 @@ git add .srclawyer.inventory.json && git commit -m "Add SrcLawyer baseline"
 
 ```yaml
 - uses: actions/checkout@v7          # pin to a commit sha in your own workflows
-- uses: SrcLawyer/srclawyer@v0.8.0
+- uses: SrcLawyer/srclawyer@v0.9.0
   with:
-    srclawyer-version: 0.8.0        # required, and pinned: an exact version, or github:SrcLawyer/srclawyer#<40-char sha>
+    srclawyer-version: 0.9.0        # required, and pinned: an exact version, or github:SrcLawyer/srclawyer#<40-char sha>
 ```
 
 | Input | Default | |
@@ -39,6 +39,8 @@ git add .srclawyer.inventory.json && git commit -m "Add SrcLawyer baseline"
 Outputs: `result` (`no-drift`, `drift`, `inconclusive`, `error`), `added` and `removed` (comma-separated `category:<name>` / `processor:<name>`).
 
 **Permissions and secrets.** `contents: read` is enough; no secrets are used. The optional comment is the only thing that needs `pull-requests: write`. The check makes the same two kinds of network call as `scan` (see the README's *Network calls*): opaque ids, categories and signals for confidence grading, and redacted Zod schema fragments. It never calls an AI provider and never writes a policy.
+
+**What a clean result means.** A clean run means *no new items found by the scanner since your last approved review*. It is not a statement that your product or your policy is compliant. Every summary and comment also carries a one-line coverage statement: what the scan covered and what it did not.
 
 **When it fails.** A drift failure's step summary lists what was added and removed and the one-line fix: update your privacy policy, then run `npx srclawyer@<version> scan --write-inventory` and commit the file. That command refreshes the baseline and leaves a hand-edited `PRIVACY_POLICY.md` alone (it says so and exits 0); to get a fresh draft next to it, add `--out PRIVACY_POLICY.generated.md`. See the README's [Editing the generated policy](../README.md#editing-the-generated-policy). An *inconclusive* result — the confidence service unreachable, files skipped, an unsupported stack, or a discovery-mode mismatch — lists its reasons and is a warning, because it says nothing about drift. A crash, or a missing or invalid baseline, always fails.
 
@@ -77,9 +79,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: SrcLawyer/srclawyer@v0.8.0
+      - uses: SrcLawyer/srclawyer@v0.9.0
         with:
-          srclawyer-version: 0.8.0
+          srclawyer-version: 0.9.0
 ```
 
 With the optional PR comment:
@@ -90,9 +92,9 @@ permissions:
   pull-requests: write
 
 # ...
-      - uses: SrcLawyer/srclawyer@v0.8.0
+      - uses: SrcLawyer/srclawyer@v0.9.0
         with:
-          srclawyer-version: 0.8.0
+          srclawyer-version: 0.9.0
           pr-comment: "true"
 ```
 
@@ -115,7 +117,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - run: npx --yes srclawyer@0.8.0 scan --write-inventory --no-llm --out "$RUNNER_TEMP/PRIVACY_POLICY.md"
+      - run: npx --yes srclawyer@0.9.0 scan --write-inventory --no-llm --out "$RUNNER_TEMP/PRIVACY_POLICY.md"
       - run: |
           { echo '```json'; cat .srclawyer.inventory.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
