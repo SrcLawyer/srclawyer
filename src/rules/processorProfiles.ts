@@ -1,4 +1,5 @@
 import type { ProcessorProfile } from "../engine/types.js";
+import { VENDORS } from "./vendors.js";
 
 export const PROCESSOR_PROFILES: Record<string, ProcessorProfile> = {
   stripe: {
@@ -42,3 +43,13 @@ export const PROCESSOR_PROFILES: Record<string, ProcessorProfile> = {
     disclosureNotes: "Identity provider. Processes login credentials, email, and phone for MFA.",
   },
 };
+
+// Vendors added in 0.9.0 live in vendors.ts, where every claim carries a source quote.
+for (const vendor of VENDORS) {
+  PROCESSOR_PROFILES[vendor.key] = {
+    name: vendor.name,
+    dataCategories: vendor.categories,
+    disclosureNotes: vendor.disclosureNotes,
+    tags: vendor.tags,
+  };
+}

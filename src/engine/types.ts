@@ -66,6 +66,8 @@ export interface ProcessorProfile {
   name: string;
   dataCategories: DataCategory[];
   disclosureNotes: string;
+  /** Properties of the vendor from SrcLawyer's own table ("ai", "analytics", "monitoring", "advertising", ...), never inferred from a repository. */
+  tags?: string[];
 }
 
 export interface ProjectManifest {

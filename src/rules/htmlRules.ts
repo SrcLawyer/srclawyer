@@ -2,6 +2,8 @@ import { relative } from "node:path";
 import type { Finding } from "../engine/types.js";
 import { classifyFieldName } from "./dataCategoryLexicon.js";
 import { isSafeFieldName } from "./safeFieldNames.js";
+import { PROCESSOR_PROFILES } from "./processorProfiles.js";
+import { VENDORS } from "./vendors.js";
 
 // Tag matching is a start-anchor regex plus indexOf, not `<input\b[^>]*>` / `<script([^>]*)>([\s\S]*?)</script>`:
 // on a file full of unclosed tags those single regexes rescan to the end of the file from every start
@@ -165,4 +167,50 @@ export function extractInlineScriptsBounded(html: string): InlineScriptExtractio
 
 export function extractInlineScripts(html: string): ExtractedScript[] {
   return extractInlineScriptsBounded(html).scripts;
+}
+
+const SCRIPT_HOST_VENDORS = VENDORS.filter((v) => v.scriptHosts.length > 0);
+
+/**
+ * Finds vendors loaded through `<script src="https://host/...">` in an HTML file -- the documented
+ * install route for several of the vendors in vendors.ts. Only the exact hostnames listed there match;
+ * a relative or protocol-less path to another host does not. One finding per vendor per file, and the
+ * evidence is just the hostname, never the rest of the tag.
+ */
+export function runHtmlScriptHostRules(html: string, filePath: string, root: string): Finding[] {
+  if (SCRIPT_HOST_VENDORS.length === 0) return [];
+  const relPath = relative(root, filePath);
+  const lineAt = makeLineLookup(html);
+  const findings: Finding[] = [];
+  const seen = new Set<string>();
+
+  const startRe = new RegExp(SCRIPT_START_RE.source, SCRIPT_START_RE.flags);
+  let match: RegExpExecArray | null;
+  while ((match = startRe.exec(html))) {
+    const end = html.indexOf(">", match.index);
+    if (end === -1) break;
+    startRe.lastIndex = end + 1;
+    const src = getAttr(html.slice(match.index, end + 1), "src");
+    if (!src) continue;
+    const host = /^(?:https?:)?\/\/([^/:?#\s]+)/i.exec(src.trim())?.[1]?.toLowerCase();
+    if (!host) continue;
+    const vendor = SCRIPT_HOST_VENDORS.find((v) => v.scriptHosts.includes(host));
+    if (!vendor || seen.has(vendor.key)) continue;
+    seen.add(vendor.key);
+
+    const profile = PROCESSOR_PROFILES[vendor.key];
+    const line = lineAt(match.index);
+    findings.push({
+      id: `sdk:${vendor.key}:${relPath}:${line}`,
+      dataCategories: profile.dataCategories,
+      processor: profile.name,
+      description: `${profile.name} integration detected. ${profile.disclosureNotes}`,
+      confidence: "high",
+      source: "sdk-rule",
+      location: { file: relPath, line, column: 0 },
+      evidence: `<script src="https://${host}/...">`,
+      requiresReview: false,
+    });
+  }
+  return findings;
 }
