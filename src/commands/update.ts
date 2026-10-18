@@ -1,14 +1,14 @@
 import { join } from "node:path";
 import { loadConfig } from "../config/config.js";
-import { extractPlaceholders, generatePolicyMarkdown } from "../policy/generatePolicy.js";
-import { markerHash, writeMarkedFile, withPolicyMarker, type MarkedWrite } from "../policy/policyGuard.js";
-import { buildSummary, renderReviewFile, type ReviewQuestion } from "../policy/reviewFile.js";
-import { currentAnswerWord, triggeredQuestions } from "../assistant/questions.js";
-import { lowerLabel } from "../assistant/labels.js";
+import { writeMarkedFile, type MarkedWrite } from "../policy/policyGuard.js";
 import { COMMAND } from "../assistant/wording.js";
-import { PROCESSOR_PROFILES } from "../rules/processorProfiles.js";
+import { readFreshLastUpdate, sha256, writeLastUpdate, type LastUpdate } from "../assistant/stateDir.js";
+import { computeProjectState, readBaseline, type NextAction, type ProjectStateName } from "../assistant/state.js";
+import type { Publishability } from "../assistant/publishable.js";
 import { renderCheckText, type CheckFormat, type CheckReport } from "./check.js";
 import { evaluateDrift } from "./driftEvaluation.js";
+import { buildUpdateArtifacts } from "./updateArtifacts.js";
+import { categoryLabel } from "../assistant/labels.js";
 
 export const DRAFT_FILENAME = "PRIVACY_POLICY.generated.md";
 export const REVIEW_FILENAME = "PRIVACY_POLICY.review.md";
@@ -20,7 +20,8 @@ export interface UpdateOptions {
   format: CheckFormat;
 }
 
-export interface UpdateReport extends CheckReport {
+export interface UpdateReport extends CheckReport, Partial<Publishability> {
+  schema: 1;
   mode: "draft";
   /** Plain-English "what changed" lines; empty unless drift was found. */
   summary: string[];
@@ -30,43 +31,97 @@ export interface UpdateReport extends CheckReport {
   reviewHash: string | null;
   draft: MarkedWrite | null;
   review: MarkedWrite | null;
-}
-
-function tagsFor(processorName: string): string[] {
-  return Object.values(PROCESSOR_PROFILES).find((p) => p.name === processorName)?.tags ?? [];
+  state: ProjectStateName | null;
+  openQuestionCount: number;
+  nextAction: NextAction | null;
 }
 
 /**
  * Draft mode: runs the same scan and comparison as `check`, and on drift writes a draft policy and a
  * review file next to (never over) the real policy. Never touches the policy, the baseline or the
  * config, never calls an LLM provider, and keeps check's exit codes (0 no drift, 1 drift, 2 error,
- * 3 inconclusive).
+ * 3 inconclusive). Leaves a small record in .srclawyer/ so `status` and `questions` need no new scan.
  */
 export async function runUpdate(root: string, options: UpdateOptions): Promise<number> {
   const evaluation = await evaluateDrift(root, options.inventoryPath);
   const { report } = evaluation;
-  const out: UpdateReport = { ...report, mode: "draft", summary: [], questions: [], reviewHash: null, draft: null, review: null };
+  const out: UpdateReport = {
+    ...report,
+    schema: 1,
+    mode: "draft",
+    summary: [],
+    questions: [],
+    reviewHash: null,
+    draft: null,
+    review: null,
+    state: null,
+    openQuestionCount: 0,
+    nextAction: null,
+  };
+  const config = loadConfig(root);
+  const baselineText = readBaseline(root, options.inventoryPath).text;
 
   if (report.result === "drift" && evaluation.scan && report.diff) {
     const diff = report.diff;
-    const config = loadConfig(root);
-    const finalResult = { ...evaluation.scan, findings: evaluation.findings, ambiguousCount: evaluation.findings.filter((f) => f.requiresReview).length };
-    const draftBody = generatePolicyMarkdown(finalResult, config, null, evaluation.protectedLogicWarning);
-
-    const triggered = triggeredQuestions({
-      addedCategories: diff.added.categories,
-      addedCategoryLabels: diff.added.categories.map(lowerLabel),
-      addedProcessors: diff.added.processors.map((name) => ({ name, tags: tagsFor(name) })),
-    });
-    const questions: ReviewQuestion[] = triggered.map((t) => ({ ...t, currentAnswer: currentAnswerWord(t.def, config) }));
-    const reviewBody = renderReviewFile({ coverage: report.coverage ?? "", diff, questions });
-
+    const artifacts = buildUpdateArtifacts(evaluation, config);
     const dirAbs = join(root, options.outDir);
-    out.draft = writeMarkedFile(join(dirAbs, DRAFT_FILENAME), join(options.outDir, DRAFT_FILENAME), draftBody);
-    out.review = writeMarkedFile(join(dirAbs, REVIEW_FILENAME), join(options.outDir, REVIEW_FILENAME), reviewBody);
-    out.reviewHash = markerHash(withPolicyMarker(reviewBody));
-    out.questions = questions.map((q) => ({ id: q.def.id, field: String(q.def.field), ask: q.def.ask, why: q.why, sensitive: q.def.sensitive, currentAnswer: q.currentAnswer }));
-    out.summary = buildSummary({ diff, questionCount: questions.length, blankCount: extractPlaceholders(draftBody).length });
+    out.draft = writeMarkedFile(join(dirAbs, DRAFT_FILENAME), join(options.outDir, DRAFT_FILENAME), artifacts.draftBody);
+    out.review = writeMarkedFile(join(dirAbs, REVIEW_FILENAME), join(options.outDir, REVIEW_FILENAME), artifacts.reviewBody);
+    out.reviewHash = artifacts.reviewHash;
+    out.summary = artifacts.summary;
+    out.questions = artifacts.questions.map((q) => ({
+      id: q.def.id,
+      field: String(q.def.field),
+      ask: q.def.ask,
+      why: q.why,
+      sensitive: q.def.sensitive,
+      currentAnswer: q.currentAnswer,
+    }));
+    // Re-running update after the owner answered must not forget those answers: carry over the ones that
+    // still belong to this drift (same baseline, same questions).
+    const previous = readFreshLastUpdate(root, baselineText);
+    const triggeredIds = artifacts.questions.map((q) => q.def.id);
+    const record: LastUpdate = {
+      schema: 1,
+      srclawyerVersion: report.srclawyerVersion,
+      baselineSha256: sha256(baselineText ?? ""),
+      result: "drift",
+      reviewHash: artifacts.reviewHash,
+      triggered: artifacts.questions.map((q) => ({ id: q.def.id, why: q.why })),
+      answered: (previous?.answered ?? []).filter((id) => triggeredIds.includes(id)),
+      diff: {
+        addedCategories: diff.added.categories.map(categoryLabel),
+        addedProcessors: diff.added.processors,
+        removedCategories: diff.removed.categories.map(categoryLabel),
+        removedProcessors: diff.removed.processors,
+      },
+      summary: artifacts.summary,
+      inconclusiveReasonCount: 0,
+    };
+    writeLastUpdate(root, record);
+  } else if ((report.result === "no-drift" || report.result === "inconclusive") && baselineText !== null) {
+    writeLastUpdate(root, {
+      schema: 1,
+      srclawyerVersion: report.srclawyerVersion,
+      baselineSha256: sha256(baselineText),
+      result: report.result,
+      reviewHash: null,
+      triggered: [],
+      answered: [],
+      diff: null,
+      summary: [],
+      inconclusiveReasonCount: report.inconclusiveReasons.length,
+    });
+  }
+
+  if (report.result !== "error") {
+    const state = computeProjectState(root, options.inventoryPath);
+    out.state = state.state;
+    out.openQuestionCount = state.openQuestionCount;
+    out.nextAction = state.nextAction;
+    out.publishable = state.publishable;
+    out.publishableBlockers = state.publishableBlockers;
+    out.publishableWarnings = state.publishableWarnings;
   }
 
   if (options.format === "json") {
@@ -84,3 +139,4 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
   }
   return report.exitCode;
 }
+

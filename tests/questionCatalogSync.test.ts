@@ -44,7 +44,10 @@ describe("docs/question-catalog.md matches the code", () => {
   });
 
   it("contains the no-drift statement, coverage, summary, review-file and command wording", () => {
-    for (const group of [W.SUMMARY, W.REVIEW, W.COMMAND]) for (const text of strings(group)) expect(DOC, text).toContain(text);
+    for (const group of [W.SUMMARY, W.REVIEW, W.COMMAND, W.PUBLISHABLE, W.STATUS, W.OPTION_LABELS]) {
+      for (const text of strings(group)) expect(DOC, text).toContain(text);
+    }
+    for (const text of strings(W.STATUS_TEXT)) expect(DOC, text).toContain(text.replace(/:$/, ""));
     for (const text of [W.NO_DRIFT_STATEMENT, W.CHECK_NO_DRIFT_LINE, W.COVERAGE_STANDARD, W.COVERAGE_UNSUPPORTED, W.COVERAGE_SKIPPED, W.COVERAGE_TEMPLATE_SYNTAX, W.COVERAGE_AI_OFF]) {
       expect(DOC, text).toContain(text);
     }

@@ -61,3 +61,37 @@ export const COMMAND = {
     "Not updating {path}: it has been edited since SrcLawyer generated it, or SrcLawyer didn't generate it. Delete it to let SrcLawyer write a new one.",
   nothingChanged: "Your policy and your approved review state were not changed.",
 } as const;
+
+// ---- Publishable and status messages (catalog section 9.4) ----
+export const PUBLISHABLE = {
+  noPolicy: "There is no policy file yet.",
+  scanIncomplete: "Your policy has a warning that the scan was incomplete.",
+  manualReviewOne:
+    '1 item that the scanner couldn\'t classify is listed under "Items Requiring Manual Review" in your policy. Please read it before you publish.',
+  manualReviewMany:
+    '{n} items that the scanner couldn\'t classify are listed under "Items Requiring Manual Review" in your policy. Please read them before you publish.',
+} as const;
+
+export const STATUS = {
+  notSetUp: "SrcLawyer isn't set up in this project yet.",
+  noBaseline: "There is no approved review state yet.",
+  inconclusive: "The last check couldn't finish, so there is no result.",
+  nothingToApprove: "There is nothing new to approve.",
+  reviewChanged: "The review has changed since it was read. Please run the update again and read the new summary.",
+  replyNotYes: "The reply wasn't a yes, so nothing was recorded.",
+  questionsOpen: "Some questions still need an answer.",
+} as const;
+
+// Labels for `srclawyer status` without --json.
+export const STATUS_TEXT = {
+  state: "State:",
+  publishable: "Ready to publish:",
+} as const;
+
+// Option labels in `srclawyer questions` (catalog section 1.1).
+export const OPTION_LABELS = {
+  yes: "Yes",
+  no: "No",
+  unsure: "I'm not sure",
+  noMinimum: "No minimum",
+} as const;

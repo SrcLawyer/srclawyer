@@ -22,7 +22,15 @@ export interface Inventory {
   discovery: DiscoveryMode;
   categories: string[];
   processors: string[];
+  /**
+   * Present only when the baseline was recorded by `srclawyer approve`: the hash of the review that was
+   * approved and a short note with the owner's reply (at most 120 characters, one line). No dates;
+   * git history is the timestamp. It is committed to the repository together with the rest of the file.
+   */
+  approval?: { review: string; note: string };
 }
+
+export const MAX_APPROVAL_NOTE_CHARS = 120;
 
 // Default code-point sort, deliberately not localeCompare: locale-aware ordering differs between
 // machines (ICU data, LANG), which would make the committed file differ byte-for-byte between a laptop and CI.
@@ -48,11 +56,19 @@ export function serializeInventory(inventory: Inventory): string {
     discovery: inventory.discovery,
     categories: sortedUnique(inventory.categories),
     processors: sortedUnique(inventory.processors),
+    ...(inventory.approval ? { approval: { review: inventory.approval.review, note: inventory.approval.note } } : {}),
   };
   return JSON.stringify(ordered, null, 2) + "\n";
 }
 
 export type ParsedInventory = { ok: true; inventory: Inventory } | { ok: false; reason: string };
+
+function parseApproval(value: unknown): { approval?: { review: string; note: string } } {
+  if (typeof value !== "object" || value === null) return {};
+  const a = value as Record<string, unknown>;
+  if (typeof a.review !== "string" || typeof a.note !== "string") return {};
+  return { approval: { review: a.review, note: a.note.slice(0, MAX_APPROVAL_NOTE_CHARS) } };
+}
 
 export function parseInventory(text: string): ParsedInventory {
   let raw: unknown;
@@ -78,6 +94,7 @@ export function parseInventory(text: string): ParsedInventory {
       discovery: o.discovery,
       categories: sortedUnique(o.categories),
       processors: sortedUnique(o.processors),
+      ...parseApproval(o.approval),
     },
   };
 }

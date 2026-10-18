@@ -117,28 +117,37 @@ function renderContextSection(config: SrcLawyerConfig | null): string {
   return lines.join("\n");
 }
 
+// The titles of the banners that mean the scan did not see everything. `status` treats a policy that
+// still carries one as not publishable (docs/question-catalog.md section 0).
+export const INCOMPLETE_SCAN_BANNER_TITLES = [
+  "INCOMPLETE SCAN — DO NOT PUBLISH WITHOUT MANUAL REVIEW",
+  "PROTECTED-LOGIC SERVICE UNAVAILABLE — POLICY MAY BE INCOMPLETE",
+  "WORKSPACE CONFIGURATION REJECTED — SCAN MAY BE INCOMPLETE",
+  "FILES SKIPPED OR NOT ANALYZED — SCAN INCOMPLETE",
+] as const;
+
 function renderUnsupportedStackWarning(warning: string): string {
-  return ["> **WARNING: INCOMPLETE SCAN — DO NOT PUBLISH WITHOUT MANUAL REVIEW**", ">", `> ${warning}`].join("\n");
+  return [`> **WARNING: ${INCOMPLETE_SCAN_BANNER_TITLES[0]}**`, ">", `> ${warning}`].join("\n");
 }
 
 // Mirrors renderUnsupportedStackWarning's own reasoning exactly: this policy FILE gets committed and
 // shared on its own, without the CLI output that already shows this warning -- a reader of the file
 // alone has no other way to know confidence grading or Zod-schema detection didn't run for this scan.
 function renderProtectedLogicWarning(warning: string): string {
-  return ["> **WARNING: PROTECTED-LOGIC SERVICE UNAVAILABLE — POLICY MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
+  return [`> **WARNING: ${INCOMPLETE_SCAN_BANNER_TITLES[1]}**`, ">", `> ${warning}`].join("\n");
 }
 
 // Same reasoning as the other warning banners: the policy file is committed and shared without the
 // console output, and a rejected workspace config means packages outside the default locations were
 // never scanned.
 function renderWorkspaceWarning(warning: string): string {
-  return ["> **WARNING: WORKSPACE CONFIGURATION REJECTED — SCAN MAY BE INCOMPLETE**", ">", `> ${warning}`].join("\n");
+  return [`> **WARNING: ${INCOMPLETE_SCAN_BANNER_TITLES[2]}**`, ">", `> ${warning}`].join("\n");
 }
 
 // Same reasoning as the other banners: files skipped for size mean findings in them are missing from
 // a policy file that will be committed and shared without the console output.
 function renderSkippedFilesWarning(warning: string): string {
-  return ["> **WARNING: FILES SKIPPED OR NOT ANALYZED — SCAN INCOMPLETE**", ">", `> ${warning}`].join("\n");
+  return [`> **WARNING: ${INCOMPLETE_SCAN_BANNER_TITLES[3]}**`, ">", `> ${warning}`].join("\n");
 }
 
 function placeholder(label: string): string {

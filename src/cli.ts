@@ -2,7 +2,12 @@
 import { Command, CommanderError } from "commander";
 import { isValidEnvVarName, runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
+import { readFileSync } from "node:fs";
 import { runUpdate } from "./commands/update.js";
+import { runStatus } from "./commands/status.js";
+import { runQuestions } from "./commands/questionsCommand.js";
+import { runAnswer } from "./commands/answer.js";
+import { runApprove } from "./commands/approve.js";
 import { runCheck } from "./commands/check.js";
 import { DEFAULT_INVENTORY_PATH } from "./inventory/inventory.js";
 import { EXIT_CRASH } from "./exitCodes.js";
@@ -39,6 +44,7 @@ interface InitCliOptions {
   sendsDataToAiServices?: boolean;
   enableAiReview?: boolean;
   apiKeyEnvVar?: string;
+  yes?: boolean;
 }
 
 program
@@ -64,6 +70,7 @@ program
   .option("--minimum-age <number>", "minimum age required to use this product")
   .option("--sends-data-to-ai-services", "declare that user data is sent to third-party AI services")
   .option("--no-sends-data-to-ai-services", "declare that user data is not sent to third-party AI services")
+  .option("--yes", "set up with defaults and run the first scan; every policy answer stays blank for your assistant to ask you")
   .option("--enable-ai-review", "advanced: enable optional AI-assisted review of ambiguous findings with your own Anthropic API key (sets tier: byok)")
   .option("--api-key-env-var <name>", "with --enable-ai-review: the environment variable holding your Anthropic API key (default ANTHROPIC_API_KEY)")
   .action(async (opts: InitCliOptions) => {
@@ -97,6 +104,7 @@ program
       sendsDataToAiServices: opts.sendsDataToAiServices,
       enableAiReview: opts.enableAiReview,
       apiKeyEnvVar: opts.apiKeyEnvVar,
+      yes: opts.yes,
     });
   });
 
@@ -128,8 +136,9 @@ program
   .description("Check for drift: compare the code's data categories and processors with the committed baseline (exit 0 no drift, 1 drift, 2 error, 3 inconclusive)")
   .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
   .option("--format <format>", "text or json", "text")
-  .action(async (opts: { inventory: string; format: string }) => {
-    const format = opts.format;
+  .option("--json", "same as --format json")
+  .action(async (opts: { inventory: string; format: string; json?: boolean }) => {
+    const format = opts.json ? "json" : opts.format;
     if (format !== "text" && format !== "json") return program.error(`error: --format must be "text" or "json" (got "${format}")`);
     process.exitCode = await runCheck(process.cwd(), { inventoryPath: opts.inventory, format });
   });
@@ -140,10 +149,60 @@ program
   .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
   .option("--out-dir <dir>", "where to write PRIVACY_POLICY.generated.md and PRIVACY_POLICY.review.md", ".")
   .option("--format <format>", "text or json", "text")
-  .action(async (opts: { inventory: string; outDir: string; format: string }) => {
-    const format = opts.format;
+  .option("--json", "same as --format json")
+  .action(async (opts: { inventory: string; outDir: string; format: string; json?: boolean }) => {
+    const format = opts.json ? "json" : opts.format;
     if (format !== "text" && format !== "json") return program.error(`error: --format must be "text" or "json" (got "${format}")`);
     process.exitCode = await runUpdate(process.cwd(), { inventoryPath: opts.inventory, outDir: opts.outDir, format });
+  });
+
+program
+  .command("status")
+  .description("Where the project stands, from local files only (no scan, no network); always exits 0")
+  .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
+  .option("--json", "print the stable JSON report")
+  .action((opts: { inventory: string; json?: boolean }) => {
+    process.exitCode = runStatus(process.cwd(), { inventoryPath: opts.inventory, json: opts.json === true });
+  });
+
+program
+  .command("questions")
+  .description("The questions that still need the owner's answer, in plain wording, from local files only")
+  .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
+  .option("--json", "print the stable JSON report")
+  .action((opts: { inventory: string; json?: boolean }) => {
+    process.exitCode = runQuestions(process.cwd(), { inventoryPath: opts.inventory, json: opts.json === true });
+  });
+
+program
+  .command("answer <id> [value]")
+  .description("Record one answer from the owner, non-interactively (prints JSON; exit 0 recorded, 2 refused)")
+  .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
+  .option("--note <text>", "what the owner said, up to 120 characters on one line; required for the sensitive questions")
+  .option("--stdin", "read the answer from standard input instead of the argument")
+  .option("--json", "accepted for consistency; the output is always JSON")
+  .action((id: string, value: string | undefined, opts: { inventory: string; note?: string; stdin?: boolean }) => {
+    const raw = opts.stdin ? readFileSync(0, "utf8") : value;
+    if (raw === undefined) return program.error("error: give a value, or --stdin");
+    process.exitCode = runAnswer(process.cwd(), { inventoryPath: opts.inventory, id, value: raw, note: opts.note, json: true });
+  });
+
+program
+  .command("approve")
+  .description("Record the owner's confirmation that they looked at the changes (prints JSON; exit 0 recorded, 2 refused, 3 scan incomplete)")
+  .requiredOption("--review <hash>", "the review hash from update or questions")
+  .requiredOption("--user-reply <text>", "the owner's reply: their yes, and nothing else")
+  .option("--allow-unanswered <ids>", "comma-separated question ids the owner chose to leave unanswered", "")
+  .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
+  .option("--json", "accepted for consistency; the output is always JSON")
+  .action(async (opts: { review: string; userReply: string; allowUnanswered: string; inventory: string }) => {
+    process.exitCode = await runApprove(process.cwd(), {
+      inventoryPath: opts.inventory,
+      review: opts.review,
+      userReply: opts.userReply,
+      allowUnanswered: opts.allowUnanswered.split(",").map((s) => s.trim()).filter(Boolean),
+      json: true,
+    });
   });
 
 // Exit 1 is reserved for "completed with warnings" (scan) and "drift" (check), so anything that ends
