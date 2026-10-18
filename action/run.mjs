@@ -61,7 +61,7 @@ export function decideOutcome({ exitCode, report, failOnDrift, failOnInconclusiv
   if (result === undefined || !report || report.result !== result) {
     return { result: "error", failed: true, level: "error", message: report?.error ?? `srclawyer check failed (exit code ${exitCode}) without a usable report` };
   }
-  if (result === "no-drift") return { result, failed: false, level: null, message: "No drift: the code matches the committed inventory." };
+  if (result === "no-drift") return { result, failed: false, level: null, message: "No new items found by the scanner. This is not a statement that your product or your policy is compliant." };
   if (result === "drift") {
     const { added, removed } = flattenDiff(report.diff);
     const parts = [added.length ? `added ${added.join(", ")}` : null, removed.length ? `removed ${removed.join(", ")}` : null].filter(Boolean);
@@ -75,12 +75,16 @@ export function decideOutcome({ exitCode, report, failOnDrift, failOnInconclusiv
   };
 }
 
+// Verbatim from docs/question-catalog.md section 5 (tests/questionCatalogSync.test.ts checks it).
+export const NO_DRIFT_STATEMENT =
+  "No new items found by the scanner since your last approved review. This is not a statement that your product or your policy is compliant.";
+
 const code = (values) => (values.length ? values.map((v) => `\`${v}\``).join(", ") : "—");
 
 export function renderSummary({ outcome, report, spec, inventoryPath }) {
   const lines = [];
   if (outcome.result === "no-drift") {
-    lines.push("## SrcLawyer drift check: no drift", "", `The data categories and processors in the code match \`${inventoryPath}\`.`);
+    lines.push("## SrcLawyer: no new items found", "", NO_DRIFT_STATEMENT);
   } else if (outcome.result === "drift") {
     const { diff } = report;
     lines.push(
@@ -103,6 +107,7 @@ export function renderSummary({ outcome, report, spec, inventoryPath }) {
   } else {
     lines.push("## SrcLawyer drift check: error", "", outcome.message);
   }
+  if (report?.coverage && outcome.result !== "error") lines.push("", report.coverage);
   return lines.join("\n") + "\n";
 }
 

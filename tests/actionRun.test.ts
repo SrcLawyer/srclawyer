@@ -128,7 +128,7 @@ describe("renderSummary", () => {
   });
 
   it("no drift and error are one-liners", () => {
-    expect(action.renderSummary(ctx(action.decideOutcome({ exitCode: 0, report: NO_DRIFT, ...flags }), NO_DRIFT))).toContain("no drift");
+    expect(action.renderSummary(ctx(action.decideOutcome({ exitCode: 0, report: NO_DRIFT, ...flags }), NO_DRIFT))).toContain("no new items found");
     expect(action.renderSummary(ctx({ result: "error", message: "boom" }, null))).toContain("boom");
   });
 });
@@ -213,7 +213,7 @@ describe("main", () => {
     expect(h.calls[0].args).toContain("srclawyer@0.7.0");
     expect(h.calls[1].args.slice(-5)).toEqual(["check", "--format", "json", "--inventory", "docs/inv.json"]);
     expect(h.out()).toContain("result=no-drift");
-    expect(h.summary()).toContain("no drift");
+    expect(h.summary()).toContain("no new items found");
   });
 
   it("installs a pinned commit as given", () => {
@@ -312,7 +312,7 @@ describe("main: optional pull request comment", () => {
     expect(ghCalls(h).some((c) => c.args.includes("POST"))).toBe(false);
   });
 
-  it("says nothing on a clean run when there is no earlier comment, and updates it to 'no drift' when there is", () => {
+  it("says nothing on a clean run when there is no earlier comment, and updates it to 'no new items found' when there is", () => {
     const clean = harness({ checkStatus: 0, checkStdout: JSON.stringify(NO_DRIFT), event: PR_EVENT, eventName: "pull_request", inputs: prInputs });
     action.main(clean.deps);
     expect(ghCalls(clean).filter((c) => c.args.includes("POST") || c.args.includes("PATCH"))).toEqual([]);
@@ -326,7 +326,7 @@ describe("main: optional pull request comment", () => {
       ghComments: JSON.stringify({ id: 99, body: `${action.COMMENT_MARKER}\nold` }) + "\n",
     });
     action.main(resolved.deps);
-    expect(ghCalls(resolved).some((c) => c.args.includes("PATCH") && c.args.join(" ").includes("no drift"))).toBe(true);
+    expect(ghCalls(resolved).some((c) => c.args.includes("PATCH") && c.args.join(" ").includes("no new items found"))).toBe(true);
   });
 
   it("is skipped for pull requests from forks, for non-PR events, and without the option", () => {
