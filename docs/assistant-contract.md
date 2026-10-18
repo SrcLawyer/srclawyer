@@ -1,0 +1,75 @@
+# Assistant contract (JSON, schema 1)
+
+Commands an AI coding assistant can run on the owner's behalf. They print one JSON object (`schema: 1`), never prompt, and never publish or commit anything. Fields may be added in minor releases; a field is renamed or removed only in a major release, and tests pin the shape.
+
+Everything the owner is asked comes from static wording reviewed in [question-catalog.md](question-catalog.md). No file name, path, source line or free text from the project is ever put in a question, and a stored free-text answer is shown only as its length and a 60-character preview marked `"untrusted": true`.
+
+## Commands
+
+| Command | Reads | Writes | Network | Exit codes |
+|---|---|---|---|---|
+| `srclawyer status --json` | config, baseline, `.srclawyer/`, `PRIVACY_POLICY.md` | nothing | none | always 0 |
+| `srclawyer questions --json` | same | nothing | none | always 0 |
+| `srclawyer update --json` | the project | draft, review file, `.srclawyer/last-update.json` | confidence service only | 0 no new items, 1 new items found, 2 error, 3 inconclusive |
+| `srclawyer answer <id> <value> [--note <text>] [--stdin]` | config | `.srclawyer.config.yml` (one value), `.srclawyer/` | none | 0 recorded, 2 refused |
+| `srclawyer approve --review <hash> --user-reply <text> [--allow-unanswered <ids>]` | the project | `.srclawyer.inventory.json` | confidence service only | 0 recorded or nothing to approve, 2 refused, 3 scan incomplete |
+| `srclawyer init --yes` | the project | config (all answers blank), baseline, policy | confidence service only | as `scan` |
+
+`status` and `questions` answer from local files, so they are fast and safe to call at any time; they report what the last `update` found. Run `update` first.
+
+## `state`
+
+One of: `needs-setup` (no config, or no baseline), `needs-answers` (a blocking question is open), `needs-update` (nothing is known about the code since the baseline last changed), `needs-approval` (new items were found and every question is answered), `up-to-date`, `blocked` (the last update could not finish). `nextAction` says what to do: `{"do": "run-command", "command": "..."}`, `{"do": "run-update", ...}`, `{"do": "ask-user", "questionId": "..."}`, `{"do": "ask-user-to-confirm", "reviewHash": "..."}` or `{"do": "none"}`.
+
+`up-to-date` means no new items were found by the scanner since the last approved review. It is not a statement that the product or the policy is compliant, and it can hold while `publishable` is `false`.
+
+## `publishable`
+
+`status` and `update` report `publishable`, `publishableBlockers` and `publishableWarnings`, read from `PRIVACY_POLICY.md`. The policy is **not** publishable while it has no file, any `[TO COMPLETE]` blank, or any of the four "scan incomplete" banners. Items listed for manual review are a non-blocking warning with a count. An assistant must not add or enable a `/privacy` page while `publishable` is `false` unless the owner insists after being told what is missing, and a page must never show a blank without the owner having been told.
+
+## `questions`
+
+```json
+{ "schema": 1, "srclawyerVersion": "0.9.0", "state": "needs-answers", "reviewHash": null,
+  "questions": [{
+    "id": "hasEuUkUsers", "field": "hasEuUkUsers", "kind": "yes_no", "reason": "unanswered",
+    "blocking": true, "deferred": false, "sensitive": true,
+    "ask": "Do you have users in the European Union or the United Kingdom?",
+    "why": "People there have extra privacy rights, and the policy has to mention them if they apply.",
+    "explain": "...plain-English explanation the assistant may read aloud (sensitive questions only)...",
+    "options": [{"value": true, "label": "Yes"}, {"value": false, "label": "No"}, {"value": "unsure", "label": "I'm not sure"}],
+    "ifUnsure": "No problem. I'll leave a clearly marked blank in the policy, and it can't be marked ready to publish until someone fills it in.",
+    "evidence": {"addedServices": [], "addedDataKinds": []},
+    "current": {"answered": false, "value": null},
+    "answerWith": "srclawyer answer hasEuUkUsers <true|false|unsure> --note \"<what the user said>\"" }],
+  "nextAction": {"do": "ask-user", "questionId": "hasEuUkUsers"} }
+```
+
+`reason` is `unanswered` or `changed` (the code changed, so an existing answer should be confirmed; `evidence` then names the added services and kinds of data). `kind` is `yes_no`, `text`, `age` or `list`. `deferred` means the owner said they were not sure: the blank stays, and the question is not re-asked on this machine.
+
+## `answer`
+
+`srclawyer answer <id> <value>`: `true`/`false`/`unsure` for yes-no questions; a whole number 1-120, `none` (stored as `0`) or `unsure` for the minimum age; comma-separated items for a list; text (up to 500 characters, one line, no control characters) for the rest, optionally from `--stdin`. The contact email and site address are validated. `--note` (up to 120 characters, one line) is **required** for the sensitive questions and is written as a trailing comment next to the value, so a reviewer sees in the git diff what the assistant said the owner told it. `unsure` records nothing in the config. The command changes one value in `.srclawyer.config.yml`, keeps the rest of the file, comments included, and never regenerates anything; run `update` next.
+
+```json
+{ "schema": 1, "ok": true, "id": "hasEuUkUsers", "field": "hasEuUkUsers", "recorded": true, "written": true,
+  "previous": {"answered": false, "value": null}, "current": {"answered": true, "value": true},
+  "note": "owner has users in Germany", "state": "needs-update", "nextAction": {"do": "run-update", "command": "srclawyer update --json"} }
+```
+A refusal prints `{"schema": 1, "ok": false, "id": "...", "error": {"code": "...", "message": "..."}}` and exits 2. Codes: `unknown-question`, `no-config`, `invalid-value`, `invalid-note`, `note-required`.
+
+## `approve`
+
+`srclawyer approve --review <hash> --user-reply "yes"`. `--review` is the `reviewHash` from `update` or `questions`. It scans again and derives the review itself: a review file on disk, or the update record, is never trusted, so a forged one changes nothing. It refuses if the hash is not the review that is true now, if the reply is not a yes (one line, at most 120 characters), or if a blocking question is still open (it names them; the owner may leave some on purpose with `--allow-unanswered`). On success it records, in `.srclawyer.inventory.json` only:
+
+```json
+"approval": { "review": "<sha-256 of the approved review>", "note": "yes" }
+```
+
+and refreshes the baseline to the code as it is now. **No date is written**; git history is the timestamp. The note is up to 120 characters on one line, is stored in `.srclawyer.inventory.json`, and is committed to your repository if you commit that file.
+
+**What approval is.** The hash proves the caller read this review, and the note records what the owner said. Neither is security: anyone with write access can also edit the baseline directly or run `scan --write-inventory`. For a project with one owner, approval means the owner's yes plus a committed note. It is not independent review. The protection that matters is a human reviewing the pull request that contains the baseline.
+
+## Local state (`.srclawyer/`)
+
+`update` leaves `.srclawyer/last-update.json` (the review hash, the questions the change raised, the added and removed items by name, and which of those questions were answered) and `answer` may leave `.srclawyer/deferred.json`. The folder contains its own `.gitignore` with `*`, so none of it can be committed. It holds no paths, code or free text, goes stale when the baseline changes, and is safe to delete.

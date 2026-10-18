@@ -25,6 +25,8 @@ srclawyer scan --json           # findings as JSON (still writes the policy file
 srclawyer scan --out docs/privacy.md
 srclawyer scan --force          # overwrite the policy even if it was edited (see below)
 srclawyer update                # after a change: write a draft policy and a review file, never touching your policy
+srclawyer init --yes            # for an assistant: set up with blank answers and run the first scan
+srclawyer status --json         # for an assistant: where things stand (also: questions, answer, approve)
 ```
 
 If `srclawyer` isn't found right after a global install, see [Troubleshooting: command not found](#troubleshooting-command-not-found) below.
@@ -186,7 +188,9 @@ SrcLawyer writes only these files into your project, and only when you ask it to
 - `.srclawyer.config.yml`, written by `srclawyer init`.
 - `PRIVACY_POLICY.md`, written by `srclawyer scan` (or the path you give `--out`) unless that file has been edited, in which case [it is left alone](#editing-the-generated-policy).
 - `PRIVACY_POLICY.generated.md` and `PRIVACY_POLICY.review.md`, written by `srclawyer update` when it finds new items (in the folder you pass to `--out-dir`, by default the project root).
-- `.srclawyer.inventory.json`, written only when you pass `--write-inventory` to `scan` (or the path you give it).
+- `.srclawyer.inventory.json`, written when you pass `--write-inventory` to `scan` (or the path you give it), and updated by `srclawyer approve`, which adds your approval note.
+- `.srclawyer/`, a small machine-local folder written by `update` and `answer`; it contains its own `.gitignore` so nothing in it is committed, and it is safe to delete.
+- A single value in `.srclawyer.config.yml` each time `srclawyer answer` records an answer.
 
 Delete whichever of them you no longer want. No other SrcLawyer command writes files: `srclawyer check` is read-only, and installing the package writes nothing to your project.
 
@@ -208,6 +212,12 @@ npm uninstall -g srclawyer
 It never touches `PRIVACY_POLICY.md`, `.srclawyer.inventory.json` or `.srclawyer.config.yml`, and never calls an AI provider. Both files carry the same end marker as the policy, so a fresh `update` replaces them cleanly, and an edited copy is left alone. Exit codes are `check`'s: 0 nothing new, 1 new items found, 2 error, 3 inconclusive. Use `--out-dir <dir>` to write the files elsewhere.
 
 `scan`, `check` and `update` each print one **coverage** line saying what the scan covered (languages and frameworks, how many files, how many known third-party services) and what it did not. A clean result means **no new items found by the scanner since your last approved review**; it is not a statement that your product or your policy is compliant.
+
+## Commands for AI assistants
+
+`status`, `questions`, `answer` and `approve` are built so a coding assistant can run them while you answer plain-English questions: they print one stable JSON object (schema 1), never prompt, and never publish or commit anything. The questions use fixed, reviewed wording ([docs/question-catalog.md](docs/question-catalog.md)), and the exact output of every command is described in [docs/assistant-contract.md](docs/assistant-contract.md).
+
+`approve` records your confirmation that you have looked at the changes: a short note with your reply (up to 120 characters, one line) goes into `.srclawyer.inventory.json`, and into your git history if you commit that file. For a project with one owner, approval means the owner's yes plus a committed note. It is not independent review.
 
 ## Network calls
 

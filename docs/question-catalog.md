@@ -24,7 +24,7 @@
 9. **[NEW r2] `explain` text for the six sensitive questions (section 1.5).** The assistant may read it to the owner. No recommendations.
 10. **[CHANGED r2] Section 8** is now "Decisions recorded".
 11. **[CHANGED r2] Appendix A and B:** approval wording, the `explain` instruction, and the generated-footer reference.
-12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, and one wording concern found while implementing (section 9.3).
+12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), and the messages of the assistant commands (section 9.4).
 
 ---
 
@@ -331,6 +331,14 @@ Found while implementing revision 2. These are operational messages and grammati
 
 ### 9.3 A wording concern to decide
 The coverage sentence says files were skipped "(too large or unreadable)". The scanner also skips files it could not parse and files blocked because a symbolic link leaves the project, so "unreadable" is only roughly right. Options: keep as is, or reword to ` {s} files were skipped or only partly analyzed.` I have kept the approved wording and not changed it.
+
+### 9.4 Messages in the assistant commands (`status`, `questions`, `answer`, `approve`) **[NEW r2.1]**
+- **Blockers on `status`:** `SrcLawyer isn't set up in this project yet.` (no config) · `There is no approved review state yet.` (no baseline) · `The last check couldn't finish, so there is no result.` (the last update was inconclusive).
+- **Why a policy is not publishable (section 0):** `There is no policy file yet.` · the blank-count sentences from section 3.2 · `Your policy has a warning that the scan was incomplete.`
+- **Refusals from `approve`:** `There is nothing new to approve.` (not a refusal; nothing changed) · `The review has changed since it was read. Please run the update again and read the new summary.` · `The reply wasn't a yes, so nothing was recorded.` · `Some questions still need an answer.`
+- **Option labels in `questions`:** `Yes` · `No` · `I'm not sure` · `No minimum`.
+- **`status` without `--json`:** the lines `State: {state}` and `Ready to publish: yes` or `no`, followed by the blocker and warning sentences above and the question-count sentence from section 3.2.
+- **`answer` refusals** are technical, not shown to the owner: for example `Use true, false or unsure.` and `That doesn't look like an email address.` The assistant relays them in its own words.
 
 ---
 
