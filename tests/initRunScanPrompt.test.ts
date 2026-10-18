@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { runInit, type InitFlags } from "../src/commands/init.js";
+import { withPolicyMarker } from "../src/policy/policyGuard.js";
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "srclawyer-init-runscan-"));
@@ -73,6 +74,35 @@ describe("init: offer to run a scan at the end", () => {
     expect(existsSync(join(dir, "PRIVACY_POLICY.md"))).toBe(false);
     // No scan ran, so no fetch to the protected-logic endpoint either.
     expect(fetchSpy.mock.calls.length).toBe(0);
+  });
+
+  it("does not offer the scan when a PRIVACY_POLICY.md SrcLawyer would not overwrite already exists, and prints the --out command", async () => {
+    dir = tempDir();
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    writeSampleProject();
+    mockScoreFieldsEndpoint();
+    writeFileSync(join(dir, "PRIVACY_POLICY.md"), "# Our real policy\n");
+
+    await runWithStdin(dir, BASE_ANSWERS, {}, true);
+
+    const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(logged).not.toContain("Run a scan now");
+    expect(logged).toContain("PRIVACY_POLICY.md already exists and SrcLawyer will not overwrite it, so no scan was run.");
+    expect(logged).toContain("srclawyer scan --out PRIVACY_POLICY.generated.md");
+    expect(readFileSync(join(dir, "PRIVACY_POLICY.md"), "utf8")).toBe("# Our real policy\n");
+    expect(fetchSpy.mock.calls.length).toBe(0);
+  });
+
+  it("still offers the scan when the existing policy is one SrcLawyer generated and nobody edited", async () => {
+    dir = tempDir();
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    writeSampleProject();
+    mockScoreFieldsEndpoint();
+    writeFileSync(join(dir, "PRIVACY_POLICY.md"), withPolicyMarker("# Generated earlier\n"));
+
+    await runWithStdin(dir, [...BASE_ANSWERS, "y"], {}, true);
+
+    expect(readFileSync(join(dir, "PRIVACY_POLICY.md"), "utf8")).not.toContain("Generated earlier");
   });
 
   it("never asks the final question, and never scans, when stdin is not a TTY", async () => {
