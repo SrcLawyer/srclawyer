@@ -144,6 +144,24 @@ Drift fails the check, and the step summary lists what was added and removed wit
 
 `scan`'s "completed with warnings" (1) and `check`'s "inconclusive" (3) are the same condition under different numbers; `scan`'s was left alone so existing scripts keep working. Example workflows (pull requests, a weekly schedule, manual dispatch, writing the baseline on the runner) are in [docs/github-action.md](docs/github-action.md).
 
+## Removing SrcLawyer
+
+SrcLawyer writes at most three files into your project, and only when you ask it to:
+
+- `.srclawyer.config.yml`, written by `srclawyer init`.
+- `PRIVACY_POLICY.md`, written by `srclawyer scan` (or the path you give `--out`).
+- `.srclawyer.inventory.json`, written only when you pass `--write-inventory` to `scan` (or the path you give it).
+
+Delete whichever of them you no longer want. No other SrcLawyer command writes files: `srclawyer check` is read-only, and installing the package writes nothing to your project.
+
+SrcLawyer never creates a workflow file. To stop the [GitHub Action](#drift-check-github-action), delete or edit the workflow you added yourself (for example `.github/workflows/srclawyer.yml`).
+
+To remove the command-line tool:
+
+```bash
+npm uninstall -g srclawyer
+```
+
 ## Network calls
 
 Detection itself is fully local and offline — no code leaves your machine for pattern matching. Once detection completes, every `scan` makes these calls to a SrcLawyer-run service:
