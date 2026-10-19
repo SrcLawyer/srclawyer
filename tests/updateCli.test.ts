@@ -25,10 +25,14 @@ describe("the real CLI: update", () => {
     expect(cli(root, ["update"]).status).toBe(2);
 
     expect(cli(root, ["scan", "--write-inventory", "--out", "POLICY.md"]).status).toBe(0);
-    const clean = cli(root, ["update"]);
-    expect(clean.status).toBe(0);
-    expect(clean.stdout).toContain(NO_DRIFT_STATEMENT);
+    // A baseline written by scan has no approval record, so the first update is a first review: exit 0,
+    // everything found listed, no draft policy.
+    const first = cli(root, ["update"]);
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain("This is the first review of this project. Nothing has been approved yet.");
+    expect(first.stdout).not.toContain(NO_DRIFT_STATEMENT);
     expect(existsSync(join(root, "PRIVACY_POLICY.generated.md"))).toBe(false);
+    expect(existsSync(join(root, "PRIVACY_POLICY.review.md"))).toBe(true);
 
     writeFiles(root, { "src/sms.js": 'import twilio from "twilio";\n' });
     const drift = cli(root, ["update"]);

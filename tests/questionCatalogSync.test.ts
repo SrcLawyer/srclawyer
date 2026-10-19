@@ -61,6 +61,10 @@ describe("docs/question-catalog.md matches the code", () => {
     for (const rule of CLAUDE_ASK_RULES) expectInDoc(rule);
   });
 
+  it("contains the first-review wording", () => {
+    for (const text of strings(W.FIRST_REVIEW)) expectInDoc(text);
+  });
+
   it("the Action's copy of the no-drift statement is the approved sentence", () => {
     const run = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "action", "run.mjs"), "utf8");
     expect(run).toContain(W.NO_DRIFT_STATEMENT);

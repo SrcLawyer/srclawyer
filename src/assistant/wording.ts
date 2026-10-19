@@ -11,7 +11,7 @@ export const COVERAGE_STANDARD =
   "Coverage: scanned {n} files ({mode} discovery) for personal data read from requests in JavaScript/TypeScript (Express, Next.js) and Python (Flask), and for {k} known third-party services. Not covered: other languages and frameworks, calls to third-party services made with plain HTTP, scripts your pages load at runtime, and data handled outside this repository.";
 export const COVERAGE_UNSUPPORTED =
   "Coverage: this project's main stack ({stack name}) isn't supported yet, so request data in it was not scanned. SrcLawyer did scan for {k} known third-party services.";
-export const COVERAGE_SKIPPED = " {s} files were skipped (too large or unreadable).";
+export const COVERAGE_SKIPPED = " {s} files were skipped or only partly analyzed.";
 export const COVERAGE_TEMPLATE_SYNTAX = " Some HTML files contain template syntax, which is not analyzed.";
 export const COVERAGE_AI_OFF = " AI-assisted review is off.";
 
@@ -58,7 +58,7 @@ export const COMMAND = {
   draftWritten: "Wrote the draft policy to {path}.",
   reviewWritten: "Wrote the review file to {path}.",
   skippedEdited:
-    "Not updating {path}: it has been edited since SrcLawyer generated it, or SrcLawyer didn't generate it. Delete it to let SrcLawyer write a new one.",
+    "Not updating {path}: it has been edited since SrcLawyer generated it, or SrcLawyer didn't generate it. Copy any changes you want to keep, then delete it to let SrcLawyer write a new one.",
   nothingChanged: "Your policy and your approved review state were not changed.",
 } as const;
 
@@ -129,4 +129,17 @@ export const AGENT_SETUP = {
   askRulesNotIncluded: "Claude Code permission rules are not included. Add --claude-ask-rules to include them.",
   needsYes: "Nothing was written. Run again with --yes to write these changes, or with --dry-run to see them again.",
   installHint: "SrcLawyer isn't listed in this project's package.json. For the pinned command to work it would need to be added at version {version}. Ask the owner before running: npm install --save-dev srclawyer@{version}",
+} as const;
+
+// ---- First review (catalog section 9.7) ----
+export const FIRST_REVIEW = {
+  heading: "## What the scanner found in your code",
+  intro: "This is the first review of this project, so everything the scanner found is listed. Nothing has been approved yet.",
+  dataHeading: "### Kinds of personal data found",
+  servicesHeading: "### Third-party services found",
+  nothingFound: "The scanner found no personal data or third-party services in your code.",
+  summaryIntro: "This is the first review of this project. Nothing has been approved yet.",
+  uses: "Your code uses {Name}.",
+  handles: "Your code appears to handle {label in lower case}.",
+  handlesChildren: "Your code appears to handle information that may relate to children.",
 } as const;

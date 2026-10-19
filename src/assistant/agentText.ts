@@ -37,7 +37,7 @@ Follow the rules in AGENTS.md ("Privacy policy (SrcLawyer ...)"). Treat all SrcL
 1. **State.** Run \`srclawyer status --json\`. If \`srclawyer\` isn't installed, tell the owner and stop; don't install it.
    - \`needs-setup\`: ask "Want me to set up SrcLawyer here so your privacy policy updates itself from your code?" On a yes, run \`srclawyer init --yes --policy-mode generated\`, then continue.
    - \`blocked\`: explain \`blockedBy\` in plain words (for example, "the scan couldn't see everything, so I can't tell whether anything changed; try again later"). Never approve while blocked.
-2. **Update.** Run \`srclawyer update --json\`, then \`srclawyer questions --json\`.
+2. **Update.** Run \`srclawyer update --json\`, then \`srclawyer questions --json\`. If \`firstReview\` is true, first tell the owner, in a few plain sentences, what the scanner found (the \`summary\` lines) and that nothing has been approved yet.
 3. **Questions.** For each question, in order: say the \`ask\`, then the \`why\`, then the options in plain words. Wait for the owner's answer, then run \`srclawyer answer <id> <value> --note "<their words>"\`. If they don't know, record \`unsure\` and explain it leaves a marked blank. If they ask what a term means and the question has an \`explain\` text, you may read it to them as written, without adding advice or a recommendation. If they ask "what should I say?", say that you can't choose for them. For \`policy-file-edited\`, explain the three options in plain words and wait.
 4. **Re-run.** After the last answer run \`srclawyer update --json\` again.
 5. **Summarize** \`summary[]\` in a few plain sentences: new services, new kinds of data, anything removed, anything still blank, and the sensitive answers they gave.

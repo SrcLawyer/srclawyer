@@ -17,7 +17,7 @@ describe("coverageLine", () => {
   it("uses 'file-system' for the ordinary walk and singular forms", () => {
     const line = coverageLine({ scan: { ...noScan, filesScanned: 1, skippedFiles: [{ file: "a", reason: "oversized" }] }, discovery: "glob", aiReviewOn: true });
     expect(line).toContain("scanned 1 file (file-system discovery)");
-    expect(line).toContain(" 1 file was skipped (too large or unreadable).");
+    expect(line).toContain(" 1 file was skipped or only partly analyzed.");
     expect(line).not.toContain("AI-assisted review is off");
   });
   it("names an unsupported stack instead of claiming coverage", () => {
@@ -32,7 +32,7 @@ describe("coverageLine", () => {
       discovery: "git",
       aiReviewOn: true,
     });
-    expect(line).toContain(" 2 files were skipped (too large or unreadable).");
+    expect(line).toContain(" 2 files were skipped or only partly analyzed.");
     expect(line).toContain(" Some HTML files contain template syntax, which is not analyzed.");
   });
 });

@@ -2,7 +2,7 @@ import type { SrcLawyerConfig } from "../config/config.js";
 import { extractPlaceholders, generatePolicyMarkdown } from "../policy/generatePolicy.js";
 import { markerHash, withPolicyMarker } from "../policy/policyGuard.js";
 import { buildSummary, renderReviewFile, type ReviewQuestion } from "../policy/reviewFile.js";
-import { currentAnswerWord, triggeredQuestions } from "../assistant/questions.js";
+import { currentAnswerWord, triggeredQuestions, unansweredQuestions } from "../assistant/questions.js";
 import { lowerLabel } from "../assistant/labels.js";
 import { PROCESSOR_PROFILES } from "../rules/processorProfiles.js";
 import type { DriftEvaluation } from "./driftEvaluation.js";
@@ -28,20 +28,31 @@ function tagsFor(processorName: string): string[] {
  * current config. `approve` calls this too, so the review it approves is derived again from the code and
  * never read back from a file.
  */
-export function buildUpdateArtifacts(evaluation: DriftEvaluation, config: SrcLawyerConfig | null): UpdateArtifacts {
+export function buildUpdateArtifacts(evaluation: DriftEvaluation, config: SrcLawyerConfig | null, options: { firstReview?: boolean } = {}): UpdateArtifacts {
   const { report } = evaluation;
-  if (report.result !== "drift" || !evaluation.scan || !report.diff) throw new Error("buildUpdateArtifacts needs a drift result");
-  const diff = report.diff;
+  const first = options.firstReview === true;
+  if (!evaluation.scan) throw new Error("buildUpdateArtifacts needs a conclusive scan");
+  if (!first && (report.result !== "drift" || !report.diff)) throw new Error("buildUpdateArtifacts needs a drift result");
+  // The first review of a baseline nobody has approved lists everything found, as if all of it were added.
+  const diff = first
+    ? { added: { categories: evaluation.current?.categories ?? [], processors: evaluation.current?.processors ?? [] }, removed: { categories: [], processors: [] } }
+    : report.diff!;
   const finalResult = { ...evaluation.scan, findings: evaluation.findings, ambiguousCount: evaluation.findings.filter((f) => f.requiresReview).length };
   const draftBody = generatePolicyMarkdown(finalResult, config, null, evaluation.protectedLogicWarning);
 
-  const triggered = triggeredQuestions({
+  // Nothing "changed" on a first review, so there is no earlier answer to re-confirm: the questions are
+  // the ones still blank.
+  const triggered = first
+    ? []
+    : triggeredQuestions({
     addedCategories: diff.added.categories,
     addedCategoryLabels: diff.added.categories.map(lowerLabel),
     addedProcessors: diff.added.processors.map((name) => ({ name, tags: tagsFor(name) })),
   });
-  const questions: ReviewQuestion[] = triggered.map((t) => ({ ...t, currentAnswer: currentAnswerWord(t.def, config) }));
-  const reviewBody = renderReviewFile({ coverage: report.coverage ?? "", diff, questions });
+  const questions: ReviewQuestion[] = first
+    ? unansweredQuestions(config).filter((def) => def.blocking).map((def) => ({ def, why: def.why, currentAnswer: currentAnswerWord(def, config) }))
+    : triggered.map((t) => ({ ...t, currentAnswer: currentAnswerWord(t.def, config) }));
+  const reviewBody = renderReviewFile({ coverage: report.coverage ?? "", diff, questions, firstReview: first });
   const blankCount = extractPlaceholders(draftBody).length;
   const marked = withPolicyMarker(reviewBody);
   return {
@@ -50,7 +61,7 @@ export function buildUpdateArtifacts(evaluation: DriftEvaluation, config: SrcLaw
     reviewHash: markerHash(marked, 8)!,
     reviewHashFull: markerHash(marked, 64)!,
     questions,
-    summary: buildSummary({ diff, questionCount: questions.length, blankCount }),
+    summary: buildSummary({ diff, questionCount: questions.length, blankCount, firstReview: first }),
     blankCount,
   };
 }

@@ -48,13 +48,15 @@ export async function runApprove(root: string, options: ApproveOptions): Promise
   if (report.result === "inconclusive") {
     return fail(options, "inconclusive", STATUS.inconclusive, { inconclusiveReasons: report.inconclusiveReasons }, EXIT_INCONCLUSIVE);
   }
-  if (report.result === "no-drift") {
+  // The first approval of a baseline nobody has approved is a review of everything the scanner found.
+  const firstReview = report.result === "no-drift" && report.baseline !== null && !report.baseline.approved;
+  if (report.result === "no-drift" && !firstReview) {
     console.log(JSON.stringify({ schema: 1, ok: true, approved: false, message: STATUS.nothingToApprove, published: false, committed: false }, null, 2));
     return EXIT_OK;
   }
 
   const config = loadConfig(root);
-  const artifacts = buildUpdateArtifacts(evaluation, config);
+  const artifacts = buildUpdateArtifacts(evaluation, config, { firstReview });
   const given = options.review.trim().toLowerCase();
   if (!/^[0-9a-f]{8,64}$/.test(given) || !artifacts.reviewHashFull.startsWith(given)) {
     return fail(options, "review-changed", STATUS.reviewChanged, { currentReviewHash: artifacts.reviewHash });
