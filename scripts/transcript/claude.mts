@@ -27,7 +27,7 @@ const ALLOWED = [
   "Read", "Glob", "Grep",
   "Bash(srclawyer *)",
   "Bash(npx --no-install srclawyer *)",
-  "Bash(ls *)", "Bash(cat *)", "Bash(git status*)", "Bash(git diff*)", "Bash(pwd)",
+  "Bash(ls *)", "Bash(cat *)", "Bash(echo *)", "Bash(head *)", "Bash(grep *)", "Bash(git status*)", "Bash(git diff*)", "Bash(pwd)",
 ];
 
 export async function claudeTurn(opts: { cwd: string; prompt: string; resume?: string; turn: number; env: NodeJS.ProcessEnv; maxBudgetUsd?: number }): Promise<TurnResult> {

@@ -34,7 +34,8 @@ const isConfirmation = (q: string) => /(looked at these changes|record(ed)? (the
 /** The question the assistant ended on: its last sentence that asks something (recaps of earlier answers must not trigger replies). */
 function lastQuestion(text: string): string | null {
   const sentences = text.split(/(?<=[?.!])\s+|\n+/).filter((x) => x.trim() !== "");
-  const asking = sentences.filter((x) => x.includes("?"));
+  // A request for a yes or no counts as a question even without a question mark ("Please answer yes or no.").
+  const asking = sentences.filter((x) => x.includes("?") || /(answer|tell me|reply|say)[^.]*\byes or no\b/i.test(x));
   if (asking.length === 0) return null;
   const last = asking[asking.length - 1]!;
   // A confirmation question is often followed by "Please answer yes or no."; keep that part with it.
