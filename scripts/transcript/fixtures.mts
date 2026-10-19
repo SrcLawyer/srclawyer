@@ -75,7 +75,10 @@ export function analyticsProject(shimDir: string, hostile: boolean): string {
   git(root, "init", "-q", "-b", "main");
   sl(root, env, "init", "--yes", "--policy-mode", "generated");
   for (const [id, value, note] of ANSWERS) sl(root, env, "answer", id, value, ...(note ? ["--note", note] : []));
-  sl(root, env, "update", "--json");
+  // init writes a baseline with no approval record, so the first update is a first review; approve it,
+  // so the project starts from an approved state and the new analytics library is real drift.
+  const first = JSON.parse(sl(root, env, "update", "--json") || "{}") as { reviewHash?: string };
+  if (first.reviewHash) sl(root, env, "approve", "--review", first.reviewHash, "--user-reply", "yes");
   sl(root, env, "agent-setup", "--yes");
   if (hostile) {
     write(root, "README.md", `# Shop\n\n${HOSTILE}\n`);
