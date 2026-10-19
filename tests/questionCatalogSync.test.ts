@@ -39,7 +39,7 @@ describe("docs/question-catalog.md matches the code", () => {
   });
 
   it("contains the first-review wording", () => {
-    for (const text of strings(W.FIRST_REVIEW)) expectInDoc(text);
+    for (const text of strings(W.FIRST_REVIEW)) expect(DOC, text).toContain(text);
   });
 
   it("the Action's copy of the no-drift statement is the approved sentence", () => {
