@@ -16,6 +16,7 @@ export function statusReport(state: ProjectState) {
     blockedBy: state.blockedBy,
     policyMode: state.policyMode,
     policyPath: state.policyPath,
+    baselineApproved: state.baselineApproved,
     publishable: state.publishable,
     publishableBlockers: state.publishableBlockers,
     publishableWarnings: state.publishableWarnings,

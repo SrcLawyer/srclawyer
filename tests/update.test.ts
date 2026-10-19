@@ -3,7 +3,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runScan } from "../src/commands/scan.js";
 import { runUpdate, DRAFT_FILENAME, REVIEW_FILENAME } from "../src/commands/update.js";
-import { DEFAULT_INVENTORY_PATH } from "../src/inventory/inventory.js";
+import { DEFAULT_INVENTORY_PATH, parseInventory, serializeInventory } from "../src/inventory/inventory.js";
 import { classifyPolicyFile } from "../src/policy/policyGuard.js";
 import { NO_DRIFT_STATEMENT } from "../src/assistant/wording.js";
 import { initRepo, tempDir, workerStandIn, writeFiles } from "./support/gitFixture.js";
@@ -39,6 +39,13 @@ async function baselineFor(root: string) {
   process.exitCode = originalExitCode;
 }
 
+/** The baseline as `srclawyer approve` leaves it: the same inventory with an approval record. */
+function approveBaselineByHand(root: string) {
+  const parsed = parseInventory(readFileSync(join(root, DEFAULT_INVENTORY_PATH), "utf8"));
+  if (!parsed.ok) throw new Error("bad baseline");
+  writeFileSync(join(root, DEFAULT_INVENTORY_PATH), serializeInventory({ ...parsed.inventory, approval: { review: "a".repeat(64), note: "yes" } }));
+}
+
 const update = (root: string, extra: Partial<Parameters<typeof runUpdate>[1]> = {}) =>
   runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "text", ...extra });
 const read = (root: string, name: string) => readFileSync(join(root, name), "utf8");
@@ -49,6 +56,7 @@ describe("srclawyer update (draft mode)", () => {
     initRepo(root, BASE);
     const { stdout } = setup();
     await baselineFor(root);
+    approveBaselineByHand(root);
 
     const code = await update(root);
 
@@ -57,6 +65,58 @@ describe("srclawyer update (draft mode)", () => {
     expect(existsSync(join(root, REVIEW_FILENAME))).toBe(false);
     expect(stdout()).toContain(NO_DRIFT_STATEMENT);
     expect(stdout()).toContain("Coverage: scanned");
+  });
+
+  it("first review: a baseline with no approval record gets a review that lists everything found, exit 0, no draft", async () => {
+    const root = fresh();
+    initRepo(root, { ...BASE, ...SMS });
+    const { stdout } = setup();
+    await baselineFor(root); // as init leaves it: no approval record
+    expect(read(root, DEFAULT_INVENTORY_PATH)).not.toContain("approval");
+
+    const code = await update(root);
+
+    expect(code).toBe(0); // the verdict is still "no new items"; the exit code is check's
+    expect(existsSync(join(root, DRAFT_FILENAME))).toBe(false);
+    const review = read(root, REVIEW_FILENAME);
+    expect(review).toContain("## What the scanner found in your code");
+    expect(review).toContain("This is the first review of this project, so everything the scanner found is listed. Nothing has been approved yet.");
+    expect(review).toContain("### Third-party services found\n- Twilio");
+    expect(review).toContain("### Kinds of personal data found");
+    expect(review).not.toContain("What changed since your last approved review");
+    const out = stdout();
+    expect(out).toContain("This is the first review of this project. Nothing has been approved yet.");
+    expect(out).toContain("Your code uses Twilio.");
+    expect(out).toContain("Your code appears to handle phone numbers.");
+    expect(out).not.toContain(NO_DRIFT_STATEMENT); // there is no earlier approved review to be "no new items" against
+    expect(read(root, DEFAULT_INVENTORY_PATH)).not.toContain("approval"); // update never approves
+  });
+
+  it("first review in JSON: firstReview, a summary of what was found, and the questions still blank", async () => {
+    const root = fresh();
+    initRepo(root, BASE);
+    const { stdout, clear } = setup();
+    await baselineFor(root);
+    clear();
+    await update(root, { format: "json" });
+    const report = JSON.parse(stdout());
+    expect(report).toMatchObject({ result: "no-drift", exitCode: 0, firstReview: true, draft: null });
+    expect(report.summary[0]).toBe("This is the first review of this project. Nothing has been approved yet.");
+    expect(report.summary).toContain("Your code appears to handle email addresses.");
+    expect(report.summary.at(-1)).toBe("Nothing has been published or committed.");
+    expect(report.reviewHash).toMatch(/^[0-9a-f]{8}$/);
+    expect(report.baseline.approved).toBe(false);
+  });
+
+  it("a first review of a project that uses nothing says so", async () => {
+    const root = fresh();
+    initRepo(root, { "src/app.js": "export const ok = true;\n" });
+    const { stdout, clear } = setup();
+    await baselineFor(root);
+    clear();
+    await update(root, { format: "json" });
+    expect(JSON.parse(stdout()).summary).toContain("The scanner found no personal data or third-party services in your code.");
+    expect(read(root, REVIEW_FILENAME)).toContain("The scanner found no personal data or third-party services in your code.");
   });
 
   it("on drift: exit 1, writes a marked draft and review file, and never touches the policy or the baseline", async () => {

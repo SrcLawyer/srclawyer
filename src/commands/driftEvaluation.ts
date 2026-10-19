@@ -22,7 +22,7 @@ export interface CheckReport {
   result: "no-drift" | "drift" | "inconclusive" | "error";
   exitCode: number;
   srclawyerVersion: string;
-  baseline: { path: string; srclawyerVersion: string; discovery: DiscoveryMode } | null;
+  baseline: { path: string; srclawyerVersion: string; discovery: DiscoveryMode; /** Whether `srclawyer approve` has recorded an approval in it. `check` does not require one. */ approved: boolean } | null;
   currentDiscovery: DiscoveryMode | null;
   /** Present only for a conclusive result -- an inconclusive run never reports a diff. */
   diff: InventoryDiff | null;
@@ -88,7 +88,7 @@ export async function evaluateDrift(root: string, inventoryPath: string): Promis
 
   const report: CheckReport = {
     ...baseReport(),
-    baseline: { path: inventoryPath, srclawyerVersion: baseline.srclawyerVersion, discovery: baseline.discovery },
+    baseline: { path: inventoryPath, srclawyerVersion: baseline.srclawyerVersion, discovery: baseline.discovery, approved: baseline.approval !== undefined },
     currentDiscovery: discovery.mode,
     coverage: coverageLine({ scan: result, discovery: discovery.mode, aiReviewOn: false }),
   };

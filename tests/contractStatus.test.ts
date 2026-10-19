@@ -9,6 +9,7 @@ import { runQuestions, currentOf } from "../src/commands/questionsCommand.js";
 import { runUpdate } from "../src/commands/update.js";
 import { runInit } from "../src/commands/init.js";
 import { answerReport } from "../src/commands/answer.js";
+import { runApprove } from "../src/commands/approve.js";
 import { DEFAULT_CONFIG, loadConfig, writeConfig } from "../src/config/config.js";
 import { DEFAULT_INVENTORY_PATH } from "../src/inventory/inventory.js";
 import { LAST_UPDATE_FILE, STATE_DIR } from "../src/assistant/stateDir.js";
@@ -95,8 +96,22 @@ describe("computeProjectState", () => {
     answerAll(root);
     expect(computeProjectState(root).state).toBe("needs-update");
 
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    log.mockClear();
     await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
-    const s = computeProjectState(root);
+    // The baseline init wrote has no approval record, so however clean the code is the state is
+    // needs-approval until the first approve.
+    let s = computeProjectState(root);
+    expect(s.state).toBe("needs-approval");
+    expect(s.baselineApproved).toBe(false);
+    expect(s.nextAction).toMatchObject({ do: "ask-user-to-confirm" });
+    const hash = JSON.parse(String(log.mock.calls.at(-1)![0])).reviewHash as string;
+
+    expect(await runApprove(root, { inventoryPath: DEFAULT_INVENTORY_PATH, review: hash, userReply: "yes", allowUnanswered: [], json: true })).toBe(0);
+    s = computeProjectState(root);
+    expect(s.baselineApproved).toBe(true);
+    await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
+    s = computeProjectState(root);
     expect(s.state).toBe("up-to-date");
     expect(s.nextAction).toEqual({ do: "none" });
   });
@@ -125,7 +140,7 @@ describe("computeProjectState", () => {
     await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
     const s = computeProjectState(root);
     expect(s.openQuestionCount).toBe(0);
-    expect(s.state).toBe("up-to-date");
+    expect(s.state).toBe("needs-approval"); // first review still pending
     expect(s.openQuestions.some((q) => q.deferred)).toBe(true);
     // The policy on disk still has the blanks from the first scan (nothing regenerates it in handwritten mode).
     expect(s.publishable).toBe(false);
@@ -147,10 +162,10 @@ describe("computeProjectState", () => {
     const root = await setUpProject();
     answerAll(root);
     await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
-    expect(computeProjectState(root).state).toBe("up-to-date");
-    writeFileSync(join(root, DEFAULT_INVENTORY_PATH), readFileSync(join(root, DEFAULT_INVENTORY_PATH), "utf8").replace('"srclawyerVersion"', '"srclawyerVersion"'));
+    expect(computeProjectState(root).state).toBe("needs-approval");
+    writeFileSync(join(root, DEFAULT_INVENTORY_PATH), readFileSync(join(root, DEFAULT_INVENTORY_PATH), "utf8"));
     // Same bytes: still fresh.
-    expect(computeProjectState(root).state).toBe("up-to-date");
+    expect(computeProjectState(root).state).toBe("needs-approval");
     writeFileSync(join(root, DEFAULT_INVENTORY_PATH), readFileSync(join(root, DEFAULT_INVENTORY_PATH), "utf8").replace('"processors": [', '"processors": [\n    "Twilio",'));
     expect(computeProjectState(root).state).toBe("needs-update");
   });
@@ -239,7 +254,7 @@ describe("status and questions output", () => {
     expect(runStatus(root, { inventoryPath: DEFAULT_INVENTORY_PATH, json: true })).toBe(0);
     const report = JSON.parse(String(log.mock.calls[0]![0]));
     expect(Object.keys(report)).toEqual([
-      "schema", "srclawyerVersion", "state", "blockedBy", "policyMode", "policyPath", "publishable", "publishableBlockers", "publishableWarnings", "reviewHash", "openQuestionCount", "nextAction",
+      "schema", "srclawyerVersion", "state", "blockedBy", "policyMode", "policyPath", "baselineApproved", "publishable", "publishableBlockers", "publishableWarnings", "reviewHash", "openQuestionCount", "nextAction",
     ]);
     expect(report).toMatchObject({ schema: 1, state: "needs-answers", policyMode: "handwritten", policyPath: "PRIVACY_POLICY.md", publishable: false });
     expect(Object.keys(statusReport(computeProjectState(root)))).toEqual(Object.keys(report));

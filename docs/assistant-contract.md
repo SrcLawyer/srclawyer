@@ -33,6 +33,12 @@ Everything the owner is asked comes from static wording reviewed in [question-ca
 
 `keep_mine` sets `policyMode: handwritten`. `discard` saves a backup copy in `.srclawyer/backups/` (the answer reports its path) and lets the next `update` replace exactly that version of the file; nothing is deleted at the moment of the answer. `move_to_settings` changes nothing by itself: `questions` then also offers `policyText.intro`, `policyText.closing` and `policyText.additionalSections`, and when the text is moved the owner chooses `discard`.
 
+## First review
+
+A baseline written by `init` or `scan --write-inventory` carries **no approval record**. Until `srclawyer approve` has recorded one, `status` reports `baselineApproved: false` and never `up-to-date` (it is `needs-approval` once the last update has run), and the first `update` is a *first review*: the report has `"firstReview": true`, the review file and `summary[]` list **everything** the scanner found ("Your code uses Stripe.", "Your code appears to handle email addresses."), no draft policy is written, and the questions are the ones still blank. The exit code is unchanged (0 when the baseline matches the code). `approve --review <hash>` then records the first approval the same way as any other.
+
+`check` is not affected: it compares only data kinds and services, so a baseline with no approval record is treated like an approved one (exit 0 when it matches the code, 1 on new or removed items). `check --json` reports `baseline.approved` so a pipeline can look, but `check` never requires an approval.
+
 ## `state`
 
 One of: `needs-setup` (no config, or no baseline), `needs-answers` (a blocking question is open), `needs-update` (nothing is known about the code since the baseline last changed), `needs-approval` (new items were found and every question is answered), `up-to-date`, `blocked` (the last update could not finish). `nextAction` says what to do: `{"do": "run-command", "command": "..."}`, `{"do": "run-update", ...}`, `{"do": "ask-user", "questionId": "..."}`, `{"do": "ask-user-to-confirm", "reviewHash": "..."}` or `{"do": "none"}`.

@@ -176,18 +176,33 @@ describe("srclawyer approve", () => {
     expect(await approve(root, hash, "yes", ["dataRetentionPolicy"])).toBe(0);
   });
 
-  it("says there is nothing to approve when nothing is new, and changes nothing", async () => {
+  it("the first approval of an unapproved baseline approves everything the scanner found; after that there is nothing to approve", async () => {
     const root = tempDir();
     dirs.push(root);
     initRepo(root, PROJECT);
     const log = quiet();
     await runInit(root, { yes: true });
     process.exitCode = originalExitCode;
-    const before = read(root, DEFAULT_INVENTORY_PATH);
+    expect(read(root, DEFAULT_INVENTORY_PATH)).not.toContain("approval"); // init writes no approval record
+    for (const [id, [value, note]] of Object.entries(ANSWERS)) answerReport(root, { inventoryPath: DEFAULT_INVENTORY_PATH, id, value, note, json: true });
     log.mockClear();
-    expect(await approve(root, "deadbeef")).toBe(0);
+    await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
+    const hash = lastJson(log).reviewHash as string;
+
+    log.mockClear();
+    expect(await approve(root, "deadbeef")).toBe(2); // the first review has a hash like any other
+    expect(lastJson(log).error.code).toBe("review-changed");
+
+    log.mockClear();
+    expect(await approve(root, hash)).toBe(0);
+    expect(lastJson(log)).toMatchObject({ ok: true, approved: true, review: hash, note: "yes" });
+    const baseline = parseInventory(read(root, DEFAULT_INVENTORY_PATH));
+    expect(baseline.ok && baseline.inventory.approval!.note).toBe("yes");
+    expect(baseline.ok && baseline.inventory.processors).toEqual(["Stripe"]);
+
+    log.mockClear();
+    expect(await approve(root, hash)).toBe(0);
     expect(lastJson(log)).toMatchObject({ ok: true, approved: false, message: "There is nothing new to approve." });
-    expect(read(root, DEFAULT_INVENTORY_PATH)).toBe(before);
   });
 
   it("exits 3 and changes nothing when the scan cannot finish", async () => {
@@ -290,7 +305,7 @@ describe("the real CLI", () => {
     expect(q.questions.some((x: { id: string }) => x.id === "companyName")).toBe(false); // answered, so no longer open
     expect(q.questions.some((x: { id: string }) => x.id === "siteUrl")).toBe(true);
 
-    expect(cli(root, ["approve", "--review", "deadbeef", "--user-reply", "yes"]).status).toBe(0); // nothing new to approve
+    expect(cli(root, ["approve", "--review", "deadbeef", "--user-reply", "yes"]).status).toBe(2); // the first review has a hash too
     writeFiles(root, SMS);
     const update = cli(root, ["update", "--json"]);
     expect(update.status).toBe(1);
