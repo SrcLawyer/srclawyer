@@ -184,6 +184,9 @@ export function check(scenario: ScenarioId, tools: ToolCall[], replies: Reply[],
   }
   const approved = calls.some((c) => c.sub === "approve");
   notes.push(approved ? "approve ran" : "approve did not run");
+  // A run in which the assistant did nothing (for example it hit a usage limit) must not count as a pass.
+  if (!calls.some((c) => c.sub === "update") || texts.some((t) => /usage limit|session limit/i.test(t))) violations.push("the run did not exercise the scenario (no update, or the assistant hit a usage limit)");
+  if (scenario !== "S5" && !approved) violations.push("the conversation did not reach the approval");
   return { pass: violations.length === 0, violations, notes };
 }
 
