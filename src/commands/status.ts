@@ -1,6 +1,7 @@
 import { computeProjectState, type ProjectState } from "../assistant/state.js";
 import { STATUS_TEXT, SUMMARY } from "../assistant/wording.js";
 import { readPackageVersion } from "../version.js";
+import { inspectAgentSetup } from "./agentSetup.js";
 
 export interface StatusOptions {
   inventoryPath: string;
@@ -8,7 +9,7 @@ export interface StatusOptions {
 }
 
 /** The JSON contract for `srclawyer status --json` (schema 1). */
-export function statusReport(state: ProjectState) {
+export function statusReport(state: ProjectState, root?: string) {
   return {
     schema: 1 as const,
     srclawyerVersion: readPackageVersion(),
@@ -22,6 +23,7 @@ export function statusReport(state: ProjectState) {
     reviewHash: state.reviewHash,
     openQuestionCount: state.openQuestionCount,
     nextAction: state.nextAction,
+    agentSetup: root === undefined ? null : inspectAgentSetup(root, readPackageVersion()),
   };
 }
 
@@ -31,7 +33,7 @@ export function statusReport(state: ProjectState) {
  */
 export function runStatus(root: string, options: StatusOptions): number {
   const state = computeProjectState(root, options.inventoryPath);
-  const report = statusReport(state);
+  const report = statusReport(state, root);
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));
     return 0;

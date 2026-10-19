@@ -9,6 +9,7 @@ import {
   TRIGGER_WHY_TEMPLATES,
 } from "../src/assistant/questions.js";
 import * as W from "../src/assistant/wording.js";
+import { RULES_END, SKILL_TEXT, rulesBlock, CLAUDE_ASK_RULES } from "../src/assistant/agentText.js";
 import { GENERATED_FOOTER, GENERATED_HEADER_COMMENT, NO_MINIMUM_AGE_SENTENCE } from "../src/policy/generatePolicy.js";
 
 const RAW = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "question-catalog.md"), "utf8");
@@ -50,6 +51,14 @@ describe("docs/question-catalog.md matches the code", () => {
     expectInDoc(GENERATED_FOOTER);
     expectInDoc(NO_MINIMUM_AGE_SENTENCE);
     expectInDoc("Last updated: {value}");
+  });
+
+  it("contains the assistant instructions exactly as they are written into a project", () => {
+    expectInDoc(rulesBlock("0.9.0"), "rules block");
+    expectInDoc(SKILL_TEXT, "skill");
+    expect(rulesBlock("0.9.0").endsWith(RULES_END)).toBe(true);
+    for (const text of strings(W.AGENT_SETUP)) expectInDoc(text);
+    for (const rule of CLAUDE_ASK_RULES) expectInDoc(rule);
   });
 
   it("the Action's copy of the no-drift statement is the approved sentence", () => {

@@ -114,3 +114,19 @@ export const POLICY_FILE_QUESTION = {
   ask: "Your privacy policy file has changes that SrcLawyer didn't make. What should happen to them?",
   why: "SrcLawyer won't overwrite your changes without asking.",
 } as const;
+
+// ---- agent-setup (catalog section 9.6) ----
+export const AGENT_SETUP = {
+  create: "will be created",
+  insert: "a SrcLawyer section will be added at the end",
+  replace: "the SrcLawyer section will be updated to this version",
+  merge: "four permission rules will be added (everything else in the file is kept)",
+  unchanged: "already up to date, no change",
+  leftEdited: "has been edited, so it was left alone",
+  leftOther: "could not be read safely, so it was left alone",
+  promptWrite: "Write these changes? [y/N] ",
+  promptAskRules: "Also add rules to .claude/settings.json so Claude Code always asks you before recording an answer or an approval? [y/N] ",
+  askRulesNotIncluded: "Claude Code permission rules are not included. Add --claude-ask-rules to include them.",
+  needsYes: "Nothing was written. Run again with --yes to write these changes, or with --dry-run to see them again.",
+  installHint: "Add SrcLawyer to this project at the version the instructions are pinned to, so the pinned command works: npm install --save-dev srclawyer@{version}",
+} as const;

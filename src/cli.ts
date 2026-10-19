@@ -8,6 +8,7 @@ import { runStatus } from "./commands/status.js";
 import { runQuestions } from "./commands/questionsCommand.js";
 import { runAnswer } from "./commands/answer.js";
 import { runApprove } from "./commands/approve.js";
+import { runAgentSetup } from "./commands/agentSetup.js";
 import { runCheck } from "./commands/check.js";
 import { DEFAULT_INVENTORY_PATH } from "./inventory/inventory.js";
 import { EXIT_CRASH } from "./exitCodes.js";
@@ -46,6 +47,7 @@ interface InitCliOptions {
   apiKeyEnvVar?: string;
   yes?: boolean;
   policyMode?: string;
+  agentRules?: boolean;
 }
 
 program
@@ -72,6 +74,7 @@ program
   .option("--sends-data-to-ai-services", "declare that user data is sent to third-party AI services")
   .option("--no-sends-data-to-ai-services", "declare that user data is not sent to third-party AI services")
   .option("--policy-mode <mode>", "generated: the policy file is a build output that scan and update always regenerate; handwritten (the default): the file is yours once you edit it")
+  .option("--agent-rules", "after setup, show and (with your yes, or --yes) write the instructions for your coding assistant (see agent-setup)")
   .option("--yes", "set up with defaults and run the first scan; every policy answer stays blank for your assistant to ask you")
   .option("--enable-ai-review", "advanced: enable optional AI-assisted review of ambiguous findings with your own Anthropic API key (sets tier: byok)")
   .option("--api-key-env-var <name>", "with --enable-ai-review: the environment variable holding your Anthropic API key (default ANTHROPIC_API_KEY)")
@@ -113,6 +116,9 @@ program
       yes: opts.yes,
       policyMode: opts.policyMode as "generated" | "handwritten" | undefined,
     });
+    if (opts.agentRules) {
+      process.exitCode = (await runAgentSetup(process.cwd(), { dryRun: false, yes: opts.yes === true, claudeAskRules: false, json: false })) || process.exitCode;
+    }
   });
 
 program
@@ -211,6 +217,17 @@ program
       allowUnanswered: opts.allowUnanswered.split(",").map((s) => s.trim()).filter(Boolean),
       json: true,
     });
+  });
+
+program
+  .command("agent-setup")
+  .description("Show, and with your yes write, the instructions that let a coding assistant keep your privacy policy current (AGENTS.md, the skill, optional Claude Code permission rules); never overwrites a file")
+  .option("--dry-run", "show what would be written and write nothing")
+  .option("--yes", "write without asking (the assistant has already shown you the plan and you said yes)")
+  .option("--claude-ask-rules", "also merge four permission rules into .claude/settings.json so Claude Code always asks before recording an answer or an approval")
+  .option("--json", "print the plan as JSON")
+  .action(async (opts: { dryRun?: boolean; yes?: boolean; claudeAskRules?: boolean; json?: boolean }) => {
+    process.exitCode = await runAgentSetup(process.cwd(), { dryRun: opts.dryRun === true, yes: opts.yes === true, claudeAskRules: opts.claudeAskRules === true, json: opts.json === true });
   });
 
 // Exit 1 is reserved for "completed with warnings" (scan) and "drift" (check), so anything that ends

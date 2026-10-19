@@ -239,10 +239,11 @@ describe("status and questions output", () => {
     expect(runStatus(root, { inventoryPath: DEFAULT_INVENTORY_PATH, json: true })).toBe(0);
     const report = JSON.parse(String(log.mock.calls[0]![0]));
     expect(Object.keys(report)).toEqual([
-      "schema", "srclawyerVersion", "state", "blockedBy", "policyMode", "policyPath", "publishable", "publishableBlockers", "publishableWarnings", "reviewHash", "openQuestionCount", "nextAction",
+      "schema", "srclawyerVersion", "state", "blockedBy", "policyMode", "policyPath", "publishable", "publishableBlockers", "publishableWarnings", "reviewHash", "openQuestionCount", "nextAction", "agentSetup",
     ]);
     expect(report).toMatchObject({ schema: 1, state: "needs-answers", policyMode: "handwritten", policyPath: "PRIVACY_POLICY.md", publishable: false });
-    expect(Object.keys(statusReport(computeProjectState(root)))).toEqual(Object.keys(report));
+    expect(Object.keys(statusReport(computeProjectState(root), root))).toEqual(Object.keys(report));
+    expect(report.agentSetup).toEqual({ version: report.srclawyerVersion, agentsMd: "not-present", claudeMd: "not-present", skill: "missing" });
   });
 
   it("status without --json prints the approved labels and sentences", async () => {
