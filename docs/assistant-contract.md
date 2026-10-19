@@ -17,6 +17,22 @@ Everything the owner is asked comes from static wording reviewed in [question-ca
 
 `status` and `questions` answer from local files, so they are fast and safe to call at any time; they report what the last `update` found. Run `update` first.
 
+## `policyMode`
+
+`status` reports `policyMode`: `handwritten` (also when the config has no `policyMode`) or `generated`. In generated mode `update` regenerates `PRIVACY_POLICY.md` every time the scan is conclusive (it writes the review file when new items are found, but no separate draft), and exits 2 without touching the file if it was edited. Then `status` is `blocked` with `policy-file-edited`, and `questions` carries one question:
+
+```json
+{ "id": "policy-file-edited", "kind": "choice", "reason": "attention", "blocking": true,
+  "ask": "Your privacy policy file has changes that SrcLawyer didn't make. What should happen to them?",
+  "why": "SrcLawyer won't overwrite your changes without asking.",
+  "options": [{"value": "keep_mine", "label": "Keep my changes and edit the policy by hand from now on"},
+              {"value": "move_to_settings", "label": "Move my changes into SrcLawyer's settings so the policy can keep updating itself (I'll help, and you approve each piece)"},
+              {"value": "discard", "label": "Throw them away and regenerate the policy (a backup copy is saved first)"}],
+  "answerWith": "srclawyer answer policy-file-edited <keep_mine|move_to_settings|discard>" }
+```
+
+`keep_mine` sets `policyMode: handwritten`. `discard` saves a backup copy in `.srclawyer/backups/` (the answer reports its path) and lets the next `update` replace exactly that version of the file; nothing is deleted at the moment of the answer. `move_to_settings` changes nothing by itself: `questions` then also offers `policyText.intro`, `policyText.closing` and `policyText.additionalSections`, and when the text is moved the owner chooses `discard`.
+
 ## `state`
 
 One of: `needs-setup` (no config, or no baseline), `needs-answers` (a blocking question is open), `needs-update` (nothing is known about the code since the baseline last changed), `needs-approval` (new items were found and every question is answered), `up-to-date`, `blocked` (the last update could not finish). `nextAction` says what to do: `{"do": "run-command", "command": "..."}`, `{"do": "run-update", ...}`, `{"do": "ask-user", "questionId": "..."}`, `{"do": "ask-user-to-confirm", "reviewHash": "..."}` or `{"do": "none"}`.
@@ -57,6 +73,10 @@ One of: `needs-setup` (no config, or no baseline), `needs-answers` (a blocking q
   "note": "owner has users in Germany", "state": "needs-update", "nextAction": {"do": "run-update", "command": "srclawyer update --json"} }
 ```
 A refusal prints `{"schema": 1, "ok": false, "id": "...", "error": {"code": "...", "message": "..."}}` and exits 2. Codes: `unknown-question`, `no-config`, `invalid-value`, `invalid-note`, `note-required`.
+
+## `policyText` answers
+
+`srclawyer answer policyText.intro|closing|lastUpdated --stdin` and `srclawyer answer policyText.additionalSections --heading "<heading>" --stdin` record text for a generated policy, exactly as given (line breaks allowed except in the date; limits: heading 100, date 100, introduction and closing 2,000, section body 4,000 characters; at most 10 sections; no control characters; a line that imitates SrcLawyer's end-of-file marker is refused). `answer policyText.lastUpdated none` records that the owner wants no date. The date question is offered once, in generated mode, and is never filled in by SrcLawyer or an assistant.
 
 ## `approve`
 

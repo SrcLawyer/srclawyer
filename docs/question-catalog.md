@@ -24,7 +24,7 @@
 9. **[NEW r2] `explain` text for the six sensitive questions (section 1.5).** The assistant may read it to the owner. No recommendations.
 10. **[CHANGED r2] Section 8** is now "Decisions recorded".
 11. **[CHANGED r2] Appendix A and B:** approval wording, the `explain` instruction, and the generated-footer reference.
-12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), and the messages of the assistant commands (section 9.4).
+12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), the messages of the assistant commands (section 9.4), and generated-mode file decisions and backups (section 9.5).
 
 ---
 
@@ -339,6 +339,12 @@ The coverage sentence says files were skipped "(too large or unreadable)". The s
 - **Option labels in `questions`:** `Yes` · `No` · `I'm not sure` · `No minimum`.
 - **`status` without `--json`:** the lines `State: {state}` and `Ready to publish: yes` or `no`, followed by the blocker and warning sentences above and the question-count sentence from section 3.2.
 - **`answer` refusals** are technical, not shown to the owner: for example `Use true, false or unsure.` and `That doesn't look like an email address.` The assistant relays them in its own words.
+
+### 9.5 Generated mode: file decisions and backups **[NEW r2.2]**
+- **Backup note**, printed whenever SrcLawyer replaces a policy file it did not write as it stands (after `--force`, or after the owner chose to throw their changes away): `A copy of the previous file was saved to {path}.` The copy is kept in `.srclawyer/backups/`, which is never committed.
+- **Option labels for the `policy-file-edited` question** (section 1.3), as the assistant is given them: `Keep my changes and edit the policy by hand from now on` · `Move my changes into SrcLawyer's settings so the policy can keep updating itself (I'll help, and you approve each piece)` · `Throw them away and regenerate the policy (a backup copy is saved first)`.
+- **What each choice does.** *Keep my changes* sets `policyMode: handwritten`. *Throw them away* saves a backup now and lets the next regeneration replace exactly that version of the file. *Move my changes* changes nothing by itself: the assistant then asks for each piece of text (an introduction, extra sections, a closing) and records it as `policyText`, and when the owner is done they choose *Throw them away*.
+- **`update` in generated mode** regenerates `PRIVACY_POLICY.md` every time the scan is conclusive, with or without new items. If the file was edited it is not touched, `update` exits 2, and the first-edition refusal sentences from `scan` are printed (the two sentences in the README's "Editing the generated policy"). It no longer writes a separate `PRIVACY_POLICY.generated.md`, because the policy itself is regenerated.
 
 ---
 
