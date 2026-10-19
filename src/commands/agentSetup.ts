@@ -248,7 +248,7 @@ export async function runAgentSetup(root: string, options: AgentSetupOptions, io
     }
   }
 
-  const installHint = needsNodeInstallHint(root) ? AGENT_SETUP.installHint.replace("{version}", version) : null;
+  const installHint = needsNodeInstallHint(root) ? AGENT_SETUP.installHint.replaceAll("{version}", version) : null;
   if (options.json) {
     console.log(
       JSON.stringify(

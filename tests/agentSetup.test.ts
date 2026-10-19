@@ -266,7 +266,7 @@ describe("the install hint and status", () => {
   it("suggests the pinned dev dependency for a Node project that does not list SrcLawyer", async () => {
     const root = fresh({ "package.json": JSON.stringify({ name: "x", devDependencies: {} }) });
     const { out } = await run(root, { dryRun: true, yes: false });
-    expect(JSON.parse(out).installHint).toBe(`Add SrcLawyer to this project at the version the instructions are pinned to, so the pinned command works: npm install --save-dev srclawyer@${V}`);
+    expect(JSON.parse(out).installHint).toBe(`SrcLawyer isn't listed in this project's package.json. For the pinned command to work it would need to be added at version ${V}. Ask the owner before running: npm install --save-dev srclawyer@${V}`);
   });
   it("says nothing when it is already a dependency or there is no package.json", async () => {
     const withDep = fresh({ "package.json": JSON.stringify({ devDependencies: { srclawyer: "0.9.0" } }) });

@@ -128,5 +128,5 @@ export const AGENT_SETUP = {
   promptAskRules: "Also add rules to .claude/settings.json so Claude Code always asks you before recording an answer or an approval? [y/N] ",
   askRulesNotIncluded: "Claude Code permission rules are not included. Add --claude-ask-rules to include them.",
   needsYes: "Nothing was written. Run again with --yes to write these changes, or with --dry-run to see them again.",
-  installHint: "Add SrcLawyer to this project at the version the instructions are pinned to, so the pinned command works: npm install --save-dev srclawyer@{version}",
+  installHint: "SrcLawyer isn't listed in this project's package.json. For the pinned command to work it would need to be added at version {version}. Ask the owner before running: npm install --save-dev srclawyer@{version}",
 } as const;

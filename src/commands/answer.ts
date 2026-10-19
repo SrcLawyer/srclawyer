@@ -6,7 +6,7 @@ import { configPath, loadConfig, POLICY_TEXT_LIMITS } from "../config/config.js"
 import { DEFAULT_POLICY_PATH } from "../policy/policyGuard.js";
 import { POLICY_FILE_CHOICES, POLICY_FILE_EDITED_ID, QUESTION_BY_ID, policyTextKeyOf, type PolicyFileChoice, type PolicyTextKey, type QuestionDef } from "../assistant/questions.js";
 import { computeProjectState, readBaseline } from "../assistant/state.js";
-import { backupFile, markAnswered, readDeferred, writeDeferred, writePolicyChoice } from "../assistant/stateDir.js";
+import { backupFile, markAnswered, readDeferred, readFreshLastUpdate, writeDeferred, writePolicyChoice } from "../assistant/stateDir.js";
 import { BACKUP_NOTE, STATUS } from "../assistant/wording.js";
 import { currentOf } from "./questionsCommand.js";
 import { readPackageVersion } from "../version.js";
@@ -202,11 +202,20 @@ export function answerReport(root: string, options: AnswerOptions) {
   const baselineText = readBaseline(root, options.inventoryPath).text;
 
   let written = false;
+  let cleared = false;
   if (parsed.kind === "value") {
     writeConfigValue(root, String(def.field), parsed.value, note);
     written = true;
     writeDeferred(root, readDeferred(root).filter((id) => id !== def.id));
   } else if (!previous.answered) {
+    writeDeferred(root, [...readDeferred(root), def.id]);
+  } else if (readFreshLastUpdate(root, baselineText)?.triggered.some((t) => t.id === def.id)) {
+    // A change in the code raised this question so the owner could confirm an earlier answer, and they
+    // cannot. Keeping the old answer would let the policy state something nobody has confirmed, so it
+    // becomes a marked blank ("I'll leave a clearly marked blank in the policy").
+    writeConfigValue(root, String(def.field), def.kind === "list" ? [] : null, undefined);
+    written = true;
+    cleared = true;
     writeDeferred(root, [...readDeferred(root), def.id]);
   }
   markAnswered(root, baselineText, def.id);
@@ -220,6 +229,7 @@ export function answerReport(root: string, options: AnswerOptions) {
     field: String(def.field),
     recorded: parsed.kind === "value",
     written,
+    cleared,
     previous,
     current: currentOf(def, loadConfig(root)),
     ...(note ? { note } : {}),

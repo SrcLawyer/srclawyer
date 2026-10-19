@@ -132,6 +132,31 @@ describe("computeProjectState", () => {
     expect(s.publishableBlockers[0]).toMatchObject({ code: "blank" });
   });
 
+  it("'I'm not sure' about a re-confirm question clears the old answer to a marked blank, and says so", async () => {
+    const root = await setUpProject();
+    answerAll(root);
+    writeFiles(root, { "src/sms.js": 'import twilio from "twilio";\n' });
+    await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
+    expect(loadConfig(root)!.dataRetentionPolicy).toBe("until the account is deleted");
+
+    const report = answerReport(root, { inventoryPath: DEFAULT_INVENTORY_PATH, id: "dataRetentionPolicy", value: "unsure", json: true }) as { recorded: boolean; written: boolean; cleared: boolean };
+    expect(report).toMatchObject({ recorded: false, written: true, cleared: true });
+    expect(loadConfig(root)!.dataRetentionPolicy).toBeNull();
+    // It no longer blocks the state (the owner has said so), but the policy will carry a blank.
+    const state = computeProjectState(root);
+    expect(state.openQuestions.find((q) => q.def.id === "dataRetentionPolicy")).toMatchObject({ reason: "unanswered", deferred: true, blocking: false });
+    expect(state.state).toBe("needs-approval");
+  });
+
+  it("'I'm not sure' about a question that was not raised by a change leaves the answer alone", async () => {
+    const root = await setUpProject();
+    answerAll(root);
+    await runUpdate(root, { inventoryPath: DEFAULT_INVENTORY_PATH, outDir: ".", format: "json" });
+    const report = answerReport(root, { inventoryPath: DEFAULT_INVENTORY_PATH, id: "dataRetentionPolicy", value: "unsure", json: true }) as { written: boolean; cleared: boolean };
+    expect(report).toMatchObject({ written: false, cleared: false });
+    expect(loadConfig(root)!.dataRetentionPolicy).toBe("until the account is deleted");
+  });
+
   it("an inconclusive update is 'blocked'", async () => {
     const root = await setUpProject();
     answerAll(root);
