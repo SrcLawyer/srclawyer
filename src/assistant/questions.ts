@@ -1,11 +1,12 @@
 import type { SrcLawyerConfig } from "../config/config.js";
+import { POLICY_FILE_QUESTION, POLICY_TEXT_QUESTIONS } from "./wording.js";
 
 // Every `ask`, `why`, `explain` and `ifUnsure` below is the exact wording in docs/question-catalog.md.
 // tests/questionCatalogSync.test.ts fails if a string here is not found verbatim in that file, so
 // wording can only change together with the reviewed document. No repository-derived text is ever
 // substituted into these strings (names come from SrcLawyer's own tables, numbers from the scan).
 
-export type QuestionKind = "yes_no" | "text" | "age" | "list";
+export type QuestionKind = "yes_no" | "text" | "age" | "list" | "choice";
 
 export interface QuestionDef {
   id: string;
@@ -82,7 +83,50 @@ export const QUESTION_DEFS: QuestionDef[] = [
     why: "Some kinds of products, such as ones for children or health, have extra rules." },
 ];
 
-export const QUESTION_BY_ID = new Map(QUESTION_DEFS.map((q) => [q.id, q]));
+// ---- Questions about the policy file and the policy's own text (catalog section 1.3) ----
+// These are not "empty config field" questions: they are raised by the state of the policy file, or
+// asked only when the owner wants to add their own text, so they are kept out of QUESTION_DEFS.
+
+export const POLICY_FILE_EDITED_ID = "policy-file-edited";
+export const POLICY_FILE_CHOICES = ["keep_mine", "move_to_settings", "discard"] as const;
+export type PolicyFileChoice = (typeof POLICY_FILE_CHOICES)[number];
+
+export const POLICY_FILE_DEF: QuestionDef = {
+  id: POLICY_FILE_EDITED_ID,
+  field: "policyMode",
+  kind: "choice",
+  ask: POLICY_FILE_QUESTION.ask,
+  why: POLICY_FILE_QUESTION.why,
+  blocking: true,
+  sensitive: false,
+};
+
+export const POLICY_TEXT_KEYS = ["lastUpdated", "intro", "closing", "additionalSections"] as const;
+export type PolicyTextKey = (typeof POLICY_TEXT_KEYS)[number];
+
+export const POLICY_TEXT_DEFS: QuestionDef[] = POLICY_TEXT_KEYS.map((key) => ({
+  id: `policyText.${key}`,
+  field: "policyText" as const,
+  kind: "text" as const,
+  ask: key === "lastUpdated" ? POLICY_TEXT_QUESTIONS.askLastUpdated : POLICY_TEXT_QUESTIONS.askText,
+  why: key === "lastUpdated" ? POLICY_TEXT_QUESTIONS.whyLastUpdated : POLICY_TEXT_QUESTIONS.whyText,
+  blocking: false,
+  sensitive: false,
+}));
+
+export function policyTextKeyOf(id: string): PolicyTextKey | null {
+  const key = id.startsWith("policyText.") ? id.slice("policyText.".length) : "";
+  return (POLICY_TEXT_KEYS as readonly string[]).includes(key) ? (key as PolicyTextKey) : null;
+}
+
+/** Whether the owner has given this piece of policy text. */
+export function isPolicyTextAnswered(key: PolicyTextKey, config: SrcLawyerConfig | null): boolean {
+  const value = config?.policyText?.[key];
+  if (key === "additionalSections") return Array.isArray(value) && value.length > 0;
+  return typeof value === "string" && value.trim() !== "";
+}
+
+export const QUESTION_BY_ID = new Map([...QUESTION_DEFS, POLICY_FILE_DEF, ...POLICY_TEXT_DEFS].map((q) => [q.id, q]));
 
 /** Whether the owner has given an answer for this question's config field. */
 export function isAnswered(def: QuestionDef, config: SrcLawyerConfig | null): boolean {
@@ -96,6 +140,8 @@ export function isAnswered(def: QuestionDef, config: SrcLawyerConfig | null): bo
       return Array.isArray(value) && value.length > 0;
     case "text":
       return typeof value === "string" && value.trim() !== "";
+    case "choice":
+      return false;
   }
 }
 

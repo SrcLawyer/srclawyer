@@ -10,6 +10,8 @@ import { join } from "node:path";
 export const STATE_DIR = ".srclawyer";
 export const LAST_UPDATE_FILE = "last-update.json";
 export const DEFERRED_FILE = "deferred.json";
+export const POLICY_CHOICE_FILE = "policy-choice.json";
+export const BACKUP_DIR = "backups";
 
 export interface LastUpdate {
   schema: 1;
@@ -84,4 +86,42 @@ export function writeDeferred(root: string, ids: string[]): void {
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify([...new Set(ids)].sort(), null, 2) + "\n");
   renameSync(tmp, file);
+}
+
+/**
+ * The owner's choice about an edited policy file in generated mode, tied to the exact bytes it was made
+ * about: "discard" lets the next regeneration replace that file (after a backup); "move" marks that the
+ * owner is moving their text into settings. A different file contents makes the record void.
+ */
+export interface PolicyChoice {
+  choice: "discard" | "move";
+  /** SHA-256 of the policy file the choice was made about. */
+  fileSha256: string;
+}
+
+export function readPolicyChoice(root: string): PolicyChoice | null {
+  try {
+    const parsed = JSON.parse(readFileSync(join(root, STATE_DIR, POLICY_CHOICE_FILE), "utf8")) as PolicyChoice;
+    return (parsed.choice === "discard" || parsed.choice === "move") && typeof parsed.fileSha256 === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePolicyChoice(root: string, choice: PolicyChoice): void {
+  const dir = ensureStateDir(root);
+  const file = join(dir, POLICY_CHOICE_FILE);
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(choice, null, 2) + "\n");
+  renameSync(tmp, file);
+}
+
+/** Copies `absPath` into .srclawyer/backups/ named by the first 8 hex of its hash; returns the project-relative path. */
+export function backupFile(root: string, absPath: string, baseName: string): string {
+  const dir = join(ensureStateDir(root), BACKUP_DIR);
+  mkdirSync(dir, { recursive: true });
+  const text = readFileSync(absPath);
+  const target = join(dir, `${baseName}.${createHash("sha256").update(text).digest("hex").slice(0, 8)}.md`);
+  writeFileSync(target, text);
+  return join(STATE_DIR, BACKUP_DIR, `${baseName}.${createHash("sha256").update(text).digest("hex").slice(0, 8)}.md`);
 }

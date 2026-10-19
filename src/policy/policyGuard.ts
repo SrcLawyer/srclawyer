@@ -72,11 +72,15 @@ export function unmarkedMessage(path: string): string {
 }
 
 /** Whether `scan` may write its policy to `path`. `displayPath` is the path as the user gave it. */
-export function checkPolicyWrite(path: string, displayPath: string, force: boolean): PolicyWriteDecision {
+export function checkPolicyWrite(path: string, displayPath: string, force: boolean, discardedFileSha256: string | null = null): PolicyWriteDecision {
   if (force) return { allowed: true };
   // A directory is not a policy file; let the write fail the way it always has.
   if (existsSync(path) && statSync(path).isDirectory()) return { allowed: true };
   const state = classifyPolicyFile(path);
+  // The owner chose to throw away exactly this version of the file (generated mode): allow, once.
+  if ((state === "edited" || state === "unmarked") && discardedFileSha256 !== null && createHash("sha256").update(readFileSync(path)).digest("hex") === discardedFileSha256) {
+    return { allowed: true };
+  }
   if (state === "edited") return { allowed: false, kind: "edited", message: editedMessage(displayPath) };
   if (state === "unmarked") return { allowed: false, kind: "unmarked", message: unmarkedMessage(displayPath) };
   return { allowed: true };
@@ -107,6 +111,22 @@ export interface MarkedWrite {
 export function writeMarkedFile(absPath: string, displayPath: string, body: string): MarkedWrite {
   const state = classifyPolicyFile(absPath);
   if (state === "edited" || state === "unmarked") return { path: displayPath, written: false, skippedReason: state };
+  mkdirSync(dirname(absPath), { recursive: true });
+  const tmp = `${absPath}.${process.pid}.tmp`;
+  writeFileSync(tmp, withPolicyMarker(body));
+  renameSync(tmp, absPath);
+  return { path: displayPath, written: true, skippedReason: null };
+}
+
+/** True when overwriting `absPath` would destroy something SrcLawyer did not write (an edited or unmarked file). */
+export function wouldDiscardOwnerWork(absPath: string): boolean {
+  if (!existsSync(absPath) || statSync(absPath).isDirectory()) return false;
+  const state = classifyPolicyFile(absPath);
+  return state === "edited" || state === "unmarked";
+}
+
+/** Writes a marked file over whatever is there, atomically. The caller has already decided this is allowed (and backed up anything that matters). */
+export function writeMarkedFileOverwriting(absPath: string, displayPath: string, body: string): MarkedWrite {
   mkdirSync(dirname(absPath), { recursive: true });
   const tmp = `${absPath}.${process.pid}.tmp`;
   writeFileSync(tmp, withPolicyMarker(body));

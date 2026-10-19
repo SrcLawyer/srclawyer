@@ -1,7 +1,7 @@
 import type { SrcLawyerConfig } from "../config/config.js";
-import { IF_UNSURE_BLOCKING, IF_UNSURE_NON_BLOCKING, type QuestionDef } from "../assistant/questions.js";
+import { IF_UNSURE_BLOCKING, IF_UNSURE_NON_BLOCKING, POLICY_FILE_CHOICES, isPolicyTextAnswered, policyTextKeyOf, type QuestionDef } from "../assistant/questions.js";
 import { computeProjectState, type OpenQuestion } from "../assistant/state.js";
-import { OPTION_LABELS } from "../assistant/wording.js";
+import { OPTION_LABELS, POLICY_FILE_OPTION_LABELS, POLICY_TEXT_QUESTIONS } from "../assistant/wording.js";
 import { readPackageVersion } from "../version.js";
 
 export interface QuestionsOptions {
@@ -18,13 +18,26 @@ function optionsFor(def: QuestionDef) {
       return [{ value: true, label: OPTION_LABELS.yes }, { value: false, label: OPTION_LABELS.no }, unsure];
     case "age":
       return [{ value: "none" as const, label: OPTION_LABELS.noMinimum }, unsure];
+    case "choice":
+      return POLICY_FILE_CHOICES.map((value) => ({ value, label: POLICY_FILE_OPTION_LABELS[value] }));
     default:
+      if (def.id === "policyText.lastUpdated") return [{ value: "none" as const, label: POLICY_TEXT_QUESTIONS.noDate }];
       return [unsure];
   }
 }
 
 /** The owner's current answer, in a form that never carries a long or repository-influenced string. */
 export function currentOf(def: QuestionDef, config: SrcLawyerConfig | null) {
+  const textKey = policyTextKeyOf(def.id);
+  if (textKey) {
+    const answered = isPolicyTextAnswered(textKey, config);
+    const v = config?.policyText?.[textKey];
+    if (textKey === "additionalSections") return { answered, count: Array.isArray(v) ? v.length : 0 };
+    return typeof v === "string" && v.trim() !== ""
+      ? { answered, length: v.length, preview: v.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, PREVIEW_CHARS), untrusted: true }
+      : { answered, length: 0 };
+  }
+  if (def.kind === "choice") return { answered: false, value: null };
   const value = config?.[def.field];
   switch (def.kind) {
     case "yes_no":
@@ -33,7 +46,7 @@ export function currentOf(def: QuestionDef, config: SrcLawyerConfig | null) {
       return typeof value === "number" ? { answered: true, value } : { answered: false, value: null };
     case "list":
       return Array.isArray(value) && value.length > 0 ? { answered: true, count: value.length } : { answered: false, count: 0 };
-    case "text":
+    default:
       return typeof value === "string" && value.trim() !== ""
         ? { answered: true, length: value.length, preview: value.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, PREVIEW_CHARS), untrusted: true }
         : { answered: false, length: 0 };
@@ -41,6 +54,9 @@ export function currentOf(def: QuestionDef, config: SrcLawyerConfig | null) {
 }
 
 function answerWith(def: QuestionDef): string {
+  if (def.kind === "choice") return `srclawyer answer ${def.id} <${POLICY_FILE_CHOICES.join("|")}>`;
+  if (def.id === "policyText.additionalSections") return 'srclawyer answer policyText.additionalSections --heading "<heading>" --stdin';
+  if (def.id.startsWith("policyText.")) return `srclawyer answer ${def.id} --stdin`;
   const hint = def.kind === "yes_no" ? "<true|false|unsure>" : def.kind === "age" ? "<number|none|unsure>" : '"<answer>"';
   return `srclawyer answer ${def.id} ${hint}${def.sensitive ? ' --note "<what the user said>"' : ""}`;
 }
@@ -59,7 +75,7 @@ export function questionJson(q: OpenQuestion, config: SrcLawyerConfig | null, ev
     why: q.why,
     ...(def.explain ? { explain: def.explain } : {}),
     options: optionsFor(def),
-    ifUnsure: def.blocking ? IF_UNSURE_BLOCKING : IF_UNSURE_NON_BLOCKING,
+    ...(def.kind === "choice" || def.id.startsWith("policyText.") ? {} : { ifUnsure: def.blocking ? IF_UNSURE_BLOCKING : IF_UNSURE_NON_BLOCKING }),
     evidence: q.reason === "changed" ? evidence : { addedServices: [], addedDataKinds: [] },
     current: currentOf(def, config),
     answerWith: answerWith(def),

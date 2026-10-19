@@ -35,6 +35,8 @@ export interface InitFlags {
    * baseline. Meant for an assistant that will ask the owner the questions afterwards.
    */
   yes?: boolean;
+  /** Written to the config: "generated" makes the policy a build output (scan and update always regenerate it). */
+  policyMode?: "generated" | "handwritten";
   /** Advanced, opt-in: sets tier: byok. Never asked about in the default flow. */
   enableAiReview?: boolean;
   apiKeyEnvVar?: string;
@@ -144,7 +146,7 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
 
   if (flags.yes) {
     console.log(`${NETWORK_CALLS_NOTICE}\n`);
-    writeConfig(root, { ...DEFAULT_CONFIG });
+    writeConfig(root, { ...DEFAULT_CONFIG, ...(flags.policyMode ? { policyMode: flags.policyMode } : {}) });
     console.log(`Wrote ${CONFIG_FILENAME}.`);
     await runScan(root, { json: false, out: DEFAULT_POLICY_PATH, llm: false, writeInventory: DEFAULT_INVENTORY_PATH });
     return;
@@ -256,7 +258,7 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
     sendsDataToAiServices,
   };
 
-  writeConfig(root, config);
+  writeConfig(root, flags.policyMode ? { ...config, policyMode: flags.policyMode } : config);
   console.log(`\nWrote ${CONFIG_FILENAME}. Run "srclawyer scan" to analyze this codebase.`);
 
   let runScanNow = false;

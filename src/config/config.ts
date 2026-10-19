@@ -14,6 +14,20 @@ export interface SrcLawyerLlmConfig {
   apiKeyEnvVar: string | null;
 }
 
+/** "generated": the policy file is a build output and scan/update always regenerate it. "handwritten" (also when absent): the file is the owner's once edited. */
+export type PolicyMode = "generated" | "handwritten";
+
+/** Text the owner adds to a generated policy; shown exactly as written (docs/question-catalog.md section 6.1). */
+export interface PolicyTextConfig {
+  intro?: string | null;
+  /** A date written by the owner. SrcLawyer never generates one. */
+  lastUpdated?: string | null;
+  closing?: string | null;
+  additionalSections?: Array<{ heading: string; body: string }>;
+}
+
+export const POLICY_TEXT_LIMITS = { heading: 100, body: 4000, intro: 2000, closing: 2000, lastUpdated: 100, sections: 10 } as const;
+
 export interface SrcLawyerConfig {
   entityLocation: string | null;
   targetMarkets: string[];
@@ -38,6 +52,8 @@ export interface SrcLawyerConfig {
   accountDeletionInstructions?: string | null;
   minimumAge?: number | null;
   sendsDataToAiServices?: boolean | null;
+  policyMode?: PolicyMode;
+  policyText?: PolicyTextConfig;
 }
 
 export const DEFAULT_CONFIG: SrcLawyerConfig = {
@@ -86,7 +102,15 @@ export function loadConfig(root: string): SrcLawyerConfig | null {
   const path = configPath(root);
   if (!existsSync(path)) return null;
   const raw = readFileSync(path, "utf8");
-  return { ...DEFAULT_CONFIG, ...(yaml.load(raw) as Partial<SrcLawyerConfig>) };
+  const config = { ...DEFAULT_CONFIG, ...(yaml.load(raw) as Partial<SrcLawyerConfig>) };
+  // Anything other than the exact word "generated" is the old behaviour.
+  if (config.policyMode !== undefined && config.policyMode !== "generated") config.policyMode = "handwritten";
+  return config;
+}
+
+/** The mode a project runs in; a missing key means the 0.8.0 behaviour. */
+export function policyModeOf(config: SrcLawyerConfig | null): PolicyMode {
+  return config?.policyMode === "generated" ? "generated" : "handwritten";
 }
 
 export function writeConfig(root: string, config: SrcLawyerConfig): void {

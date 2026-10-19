@@ -1,14 +1,16 @@
 import { join } from "node:path";
-import { loadConfig } from "../config/config.js";
-import { writeMarkedFile, type MarkedWrite } from "../policy/policyGuard.js";
-import { COMMAND } from "../assistant/wording.js";
-import { readFreshLastUpdate, sha256, writeLastUpdate, type LastUpdate } from "../assistant/stateDir.js";
+import { loadConfig, policyModeOf } from "../config/config.js";
+import { checkPolicyWrite, DEFAULT_POLICY_PATH, wouldDiscardOwnerWork, writeMarkedFile, writeMarkedFileOverwriting, type MarkedWrite } from "../policy/policyGuard.js";
+import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
+import { BACKUP_NOTE, COMMAND } from "../assistant/wording.js";
+import { backupFile, readFreshLastUpdate, readPolicyChoice, sha256, writeLastUpdate, type LastUpdate } from "../assistant/stateDir.js";
 import { computeProjectState, readBaseline, type NextAction, type ProjectStateName } from "../assistant/state.js";
 import type { Publishability } from "../assistant/publishable.js";
 import { renderCheckText, type CheckFormat, type CheckReport } from "./check.js";
 import { evaluateDrift } from "./driftEvaluation.js";
 import { buildUpdateArtifacts } from "./updateArtifacts.js";
 import { categoryLabel } from "../assistant/labels.js";
+import { EXIT_CRASH } from "../exitCodes.js";
 
 export const DRAFT_FILENAME = "PRIVACY_POLICY.generated.md";
 export const REVIEW_FILENAME = "PRIVACY_POLICY.review.md";
@@ -31,6 +33,8 @@ export interface UpdateReport extends CheckReport, Partial<Publishability> {
   reviewHash: string | null;
   draft: MarkedWrite | null;
   review: MarkedWrite | null;
+  /** policyMode generated only: the outcome of regenerating the policy file itself. */
+  policy: MarkedWrite | null;
   state: ProjectStateName | null;
   openQuestionCount: number;
   nextAction: NextAction | null;
@@ -54,18 +58,22 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
     reviewHash: null,
     draft: null,
     review: null,
+    policy: null,
     state: null,
     openQuestionCount: 0,
     nextAction: null,
   };
   const config = loadConfig(root);
   const baselineText = readBaseline(root, options.inventoryPath).text;
+  const generatedMode = policyModeOf(config) === "generated";
+  let exitCode = report.exitCode;
 
   if (report.result === "drift" && evaluation.scan && report.diff) {
     const diff = report.diff;
     const artifacts = buildUpdateArtifacts(evaluation, config);
     const dirAbs = join(root, options.outDir);
-    out.draft = writeMarkedFile(join(dirAbs, DRAFT_FILENAME), join(options.outDir, DRAFT_FILENAME), artifacts.draftBody);
+    // In generated mode the policy itself is regenerated (below), so a separate draft would only repeat it.
+    if (!generatedMode) out.draft = writeMarkedFile(join(dirAbs, DRAFT_FILENAME), join(options.outDir, DRAFT_FILENAME), artifacts.draftBody);
     out.review = writeMarkedFile(join(dirAbs, REVIEW_FILENAME), join(options.outDir, REVIEW_FILENAME), artifacts.reviewBody);
     out.reviewHash = artifacts.reviewHash;
     out.summary = artifacts.summary;
@@ -114,6 +122,24 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
     });
   }
 
+  // policyMode: generated. The policy is a build output: whenever the scan is conclusive it is regenerated
+  // from the code and the owner's answers, drift or not. An edited file is never overwritten silently.
+  if (generatedMode && evaluation.scan && (report.result === "drift" || report.result === "no-drift")) {
+    const finalResult = { ...evaluation.scan, findings: evaluation.findings, ambiguousCount: evaluation.findings.filter((f) => f.requiresReview).length };
+    const body = generatePolicyMarkdown(finalResult, config, null, evaluation.protectedLogicWarning);
+    const policyAbs = join(root, DEFAULT_POLICY_PATH);
+    const choice = readPolicyChoice(root);
+    const decision = checkPolicyWrite(policyAbs, DEFAULT_POLICY_PATH, false, choice?.choice === "discard" ? choice.fileSha256 : null);
+    if (decision.allowed) {
+      if (wouldDiscardOwnerWork(policyAbs)) console.error(BACKUP_NOTE.replace("{path}", backupFile(root, policyAbs, "PRIVACY_POLICY")));
+      out.policy = writeMarkedFileOverwriting(policyAbs, DEFAULT_POLICY_PATH, body);
+    } else {
+      out.policy = { path: DEFAULT_POLICY_PATH, written: false, skippedReason: decision.kind };
+      console.error(decision.message);
+      exitCode = EXIT_CRASH;
+    }
+  }
+
   if (report.result !== "error") {
     const state = computeProjectState(root, options.inventoryPath);
     out.state = state.state;
@@ -137,6 +163,6 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
       console.log(COMMAND.nothingChanged);
     }
   }
-  return report.exitCode;
+  return exitCode;
 }
 

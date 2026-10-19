@@ -9,8 +9,13 @@ import {
   TRIGGER_WHY_TEMPLATES,
 } from "../src/assistant/questions.js";
 import * as W from "../src/assistant/wording.js";
+import { GENERATED_FOOTER, GENERATED_HEADER_COMMENT, NO_MINIMUM_AGE_SENTENCE } from "../src/policy/generatePolicy.js";
 
-const DOC = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "question-catalog.md"), "utf8");
+const RAW = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "question-catalog.md"), "utf8");
+// Bold markers in the document are formatting, not wording, so a sentence may match with or without them.
+const PLAIN = RAW.replace(/\*\*/g, "");
+const DOC = { includes: (text: string) => RAW.includes(text) || PLAIN.includes(text) };
+const expectInDoc = (text: string, label = text) => expect(DOC.includes(text), `not found in docs/question-catalog.md: ${label}`).toBe(true);
 
 function strings(group: Record<string, unknown>): string[] {
   return Object.values(group).filter((v): v is string => typeof v === "string");
@@ -20,9 +25,9 @@ function strings(group: Record<string, unknown>): string[] {
 describe("docs/question-catalog.md matches the code", () => {
   it("contains every question's ask, why and explain", () => {
     for (const q of QUESTION_DEFS) {
-      expect(DOC, `${q.id} ask`).toContain(q.ask);
-      expect(DOC, `${q.id} why`).toContain(q.why);
-      if (q.explain) expect(DOC, `${q.id} explain`).toContain(q.explain);
+      expectInDoc(q.ask, `${q.id} ask`);
+      expectInDoc(q.why, `${q.id} why`);
+      if (q.explain) expectInDoc(q.explain, `${q.id} explain`);
     }
   });
 
@@ -33,9 +38,18 @@ describe("docs/question-catalog.md matches the code", () => {
   });
 
   it("contains the if-unsure sentences and the triggered why templates", () => {
-    expect(DOC).toContain(IF_UNSURE_BLOCKING);
-    expect(DOC).toContain(IF_UNSURE_NON_BLOCKING);
-    for (const t of TRIGGER_WHY_TEMPLATES) expect(DOC, t).toContain(t);
+    expectInDoc(IF_UNSURE_BLOCKING);
+    expectInDoc(IF_UNSURE_NON_BLOCKING);
+    for (const t of TRIGGER_WHY_TEMPLATES) expectInDoc(t, t);
+  });
+
+  it("contains the generated-mode wording: backup note, file choices and policy-text questions", () => {
+    for (const group of [W.POLICY_FILE_OPTION_LABELS, W.POLICY_TEXT_QUESTIONS, W.POLICY_FILE_QUESTION]) for (const text of strings(group)) expectInDoc(text, text);
+    expectInDoc(W.BACKUP_NOTE);
+    expectInDoc(GENERATED_HEADER_COMMENT);
+    expectInDoc(GENERATED_FOOTER);
+    expectInDoc(NO_MINIMUM_AGE_SENTENCE);
+    expectInDoc("Last updated: {value}");
   });
 
   it("the Action's copy of the no-drift statement is the approved sentence", () => {
@@ -45,11 +59,11 @@ describe("docs/question-catalog.md matches the code", () => {
 
   it("contains the no-drift statement, coverage, summary, review-file and command wording", () => {
     for (const group of [W.SUMMARY, W.REVIEW, W.COMMAND, W.PUBLISHABLE, W.STATUS, W.OPTION_LABELS]) {
-      for (const text of strings(group)) expect(DOC, text).toContain(text);
+      for (const text of strings(group)) expectInDoc(text, text);
     }
-    for (const text of strings(W.STATUS_TEXT)) expect(DOC, text).toContain(text.replace(/:$/, ""));
+    for (const text of strings(W.STATUS_TEXT)) expectInDoc(text.replace(/:$/, ""), text);
     for (const text of [W.NO_DRIFT_STATEMENT, W.CHECK_NO_DRIFT_LINE, W.COVERAGE_STANDARD, W.COVERAGE_UNSUPPORTED, W.COVERAGE_SKIPPED, W.COVERAGE_TEMPLATE_SYNTAX, W.COVERAGE_AI_OFF]) {
-      expect(DOC, text).toContain(text);
+      expectInDoc(text, text);
     }
   });
 });

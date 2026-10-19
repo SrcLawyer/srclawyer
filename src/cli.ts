@@ -45,6 +45,7 @@ interface InitCliOptions {
   enableAiReview?: boolean;
   apiKeyEnvVar?: string;
   yes?: boolean;
+  policyMode?: string;
 }
 
 program
@@ -70,6 +71,7 @@ program
   .option("--minimum-age <number>", "minimum age required to use this product")
   .option("--sends-data-to-ai-services", "declare that user data is sent to third-party AI services")
   .option("--no-sends-data-to-ai-services", "declare that user data is not sent to third-party AI services")
+  .option("--policy-mode <mode>", "generated: the policy file is a build output that scan and update always regenerate; handwritten (the default): the file is yours once you edit it")
   .option("--yes", "set up with defaults and run the first scan; every policy answer stays blank for your assistant to ask you")
   .option("--enable-ai-review", "advanced: enable optional AI-assisted review of ambiguous findings with your own Anthropic API key (sets tier: byok)")
   .option("--api-key-env-var <name>", "with --enable-ai-review: the environment variable holding your Anthropic API key (default ANTHROPIC_API_KEY)")
@@ -77,6 +79,10 @@ program
     if (opts.apiKeyEnvVar !== undefined) {
       if (!opts.enableAiReview) program.error("error: --api-key-env-var requires --enable-ai-review");
       if (!isValidEnvVarName(opts.apiKeyEnvVar)) program.error(`error: --api-key-env-var must be a valid environment variable name (got "${opts.apiKeyEnvVar}")`);
+    }
+
+    if (opts.policyMode !== undefined && opts.policyMode !== "generated" && opts.policyMode !== "handwritten") {
+      program.error(`error: --policy-mode must be "generated" or "handwritten" (got "${opts.policyMode}")`);
     }
 
     let minimumAge: number | undefined;
@@ -105,6 +111,7 @@ program
       enableAiReview: opts.enableAiReview,
       apiKeyEnvVar: opts.apiKeyEnvVar,
       yes: opts.yes,
+      policyMode: opts.policyMode as "generated" | "handwritten" | undefined,
     });
   });
 
@@ -180,11 +187,12 @@ program
   .option("--inventory <path>", "the baseline file", DEFAULT_INVENTORY_PATH)
   .option("--note <text>", "what the owner said, up to 120 characters on one line; required for the sensitive questions")
   .option("--stdin", "read the answer from standard input instead of the argument")
+  .option("--heading <text>", "policyText.additionalSections only: the heading of the section being added")
   .option("--json", "accepted for consistency; the output is always JSON")
-  .action((id: string, value: string | undefined, opts: { inventory: string; note?: string; stdin?: boolean }) => {
+  .action((id: string, value: string | undefined, opts: { inventory: string; note?: string; stdin?: boolean; heading?: string }) => {
     const raw = opts.stdin ? readFileSync(0, "utf8") : value;
     if (raw === undefined) return program.error("error: give a value, or --stdin");
-    process.exitCode = runAnswer(process.cwd(), { inventoryPath: opts.inventory, id, value: raw, note: opts.note, json: true });
+    process.exitCode = runAnswer(process.cwd(), { inventoryPath: opts.inventory, id, value: raw, note: opts.note, heading: opts.heading, json: true });
   });
 
 program

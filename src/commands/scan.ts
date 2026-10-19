@@ -1,10 +1,12 @@
 import { writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { CONFIG_FILENAME, hasUnmigratedLegacyConfig, legacyConfigMessage, loadConfig } from "../config/config.js";
 import { scan } from "../engine/scanEngine.js";
 import { formatText } from "../report/formatText.js";
 import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
-import { checkPolicyWrite, withPolicyMarker, type PolicyWriteDecision } from "../policy/policyGuard.js";
+import { checkPolicyWrite, withPolicyMarker, wouldDiscardOwnerWork, type PolicyWriteDecision } from "../policy/policyGuard.js";
+import { backupFile, readPolicyChoice } from "../assistant/stateDir.js";
+import { BACKUP_NOTE } from "../assistant/wording.js";
 import { resolveProviderForTier } from "../llm/resolveProviderForTier.js";
 import { resolveAmbiguousFindings } from "../llm/resolveAmbiguousFindings.js";
 import { resolveScanProtectedLogic } from "./protectedLogicStep.js";
@@ -29,12 +31,18 @@ export interface ScanOptions {
   force?: boolean;
 }
 
+/** SHA-256 of the policy file the owner chose to throw away (generated mode), if any. */
+function discardedSha(root: string): string | null {
+  const choice = readPolicyChoice(root);
+  return choice?.choice === "discard" ? choice.fileSha256 : null;
+}
+
 export async function runScan(root: string, options: ScanOptions): Promise<void> {
   // Refuse before any scanning or network call: a plain scan exists to write this file, so if it is
   // protected there is nothing useful to do. With --write-inventory the scan still runs, because the
   // baseline refresh is independent of the policy -- only the policy write is skipped.
   const policyPath = resolve(root, options.out);
-  let policyDecision: PolicyWriteDecision = checkPolicyWrite(policyPath, options.out, options.force ?? false);
+  let policyDecision: PolicyWriteDecision = checkPolicyWrite(policyPath, options.out, options.force ?? false, discardedSha(root));
   if (!policyDecision.allowed && !options.writeInventory) {
     console.error(policyDecision.message);
     process.exitCode = EXIT_CRASH;
@@ -99,9 +107,11 @@ export async function runScan(root: string, options: ScanOptions): Promise<void>
   const ambiguousCount = findings.filter((f) => f.requiresReview).length;
   const finalResult = { ...result, findings, ambiguousCount };
   // Checked again now: a long scan leaves time for the file to be edited since the check above.
-  policyDecision = checkPolicyWrite(policyPath, options.out, options.force ?? false);
+  policyDecision = checkPolicyWrite(policyPath, options.out, options.force ?? false, discardedSha(root));
   let policyNote: string | null = null;
   if (policyDecision.allowed) {
+    // Overwriting something SrcLawyer did not write (--force, or the owner chose to discard it) never loses it.
+    if (wouldDiscardOwnerWork(policyPath)) console.error(BACKUP_NOTE.replace("{path}", backupFile(root, policyPath, basename(options.out, extname(options.out)))));
     writeFileSync(policyPath, withPolicyMarker(generatePolicyMarkdown(finalResult, config, llmError, protectedLogicWarning)));
   } else {
     policyNote = `Privacy policy not written. ${policyDecision.message}`;

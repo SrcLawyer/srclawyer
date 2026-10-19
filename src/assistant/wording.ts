@@ -95,3 +95,22 @@ export const OPTION_LABELS = {
   unsure: "I'm not sure",
   noMinimum: "No minimum",
 } as const;
+
+// ---- Generated mode (catalog sections 1.3 and 9.5) ----
+export const BACKUP_NOTE = "A copy of the previous file was saved to {path}.";
+export const POLICY_FILE_OPTION_LABELS = {
+  keep_mine: "Keep my changes and edit the policy by hand from now on",
+  move_to_settings: "Move my changes into SrcLawyer's settings so the policy can keep updating itself (I'll help, and you approve each piece)",
+  discard: "Throw them away and regenerate the policy (a backup copy is saved first)",
+} as const;
+export const POLICY_TEXT_QUESTIONS = {
+  askText: "What would you like it to say?",
+  whyText: "Text you add is shown in the policy exactly as you write it.",
+  askLastUpdated: 'Do you want the policy to show a "last updated" date? If so, what date should it show?',
+  whyLastUpdated: "A date is something only you can decide. SrcLawyer never adds one on its own. Many policies show when they last changed, and some laws expect it.",
+  noDate: "No date",
+} as const;
+export const POLICY_FILE_QUESTION = {
+  ask: "Your privacy policy file has changes that SrcLawyer didn't make. What should happen to them?",
+  why: "SrcLawyer won't overwrite your changes without asking.",
+} as const;

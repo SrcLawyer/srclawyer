@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, type SrcLawyerConfig } from "../config/config.js";
+import { loadConfig, policyModeOf, type SrcLawyerConfig } from "../config/config.js";
 import { parseInventory, DEFAULT_INVENTORY_PATH, type Inventory } from "../inventory/inventory.js";
-import { DEFAULT_POLICY_PATH } from "../policy/policyGuard.js";
-import { QUESTION_DEFS, isAnswered, type QuestionDef } from "./questions.js";
-import { readDeferred, readFreshLastUpdate, type LastUpdate } from "./stateDir.js";
+import { createHash } from "node:crypto";
+import { DEFAULT_POLICY_PATH, classifyPolicyFile } from "../policy/policyGuard.js";
+import { POLICY_FILE_DEF, POLICY_TEXT_DEFS, QUESTION_DEFS, isAnswered, isPolicyTextAnswered, policyTextKeyOf, type QuestionDef } from "./questions.js";
+import { readDeferred, readFreshLastUpdate, readPolicyChoice, type LastUpdate } from "./stateDir.js";
 import { assessPublishable, type Publishability } from "./publishable.js";
 import { STATUS } from "./wording.js";
 
@@ -12,8 +13,8 @@ export type ProjectStateName = "needs-setup" | "needs-answers" | "needs-update" 
 
 export interface OpenQuestion {
   def: QuestionDef;
-  /** "unanswered": the field is empty. "changed": a change in the code means the answer should be confirmed. */
-  reason: "unanswered" | "changed";
+  /** "unanswered": the field is empty. "changed": a change in the code means the answer should be confirmed. "attention": the policy file needs a decision. */
+  reason: "unanswered" | "changed" | "attention";
   why: string;
   /** Blocking questions stop the state reaching "up-to-date" and must be answered (or named) before approval. */
   blocking: boolean;
@@ -31,7 +32,7 @@ export type NextAction =
 export interface ProjectState extends Publishability {
   state: ProjectStateName;
   blockedBy: Array<{ code: string; message: string }>;
-  policyMode: "handwritten";
+  policyMode: "generated" | "handwritten";
   policyPath: string;
   reviewHash: string | null;
   openQuestions: OpenQuestion[];
@@ -42,6 +43,16 @@ export interface ProjectState extends Publishability {
   baselineText: string | null;
   baseline: Inventory | null;
   last: LastUpdate | null;
+}
+
+/** True when the policy file exists, SrcLawyer did not write it as it is, and the owner has not chosen to discard exactly this version. */
+function policyFileNeedsDecision(root: string, policyFile: string): boolean {
+  if (!existsSync(policyFile)) return false;
+  const state = classifyPolicyFile(policyFile);
+  if (state !== "edited" && state !== "unmarked") return false;
+  const choice = readPolicyChoice(root);
+  const sha = createHash("sha256").update(readFileSync(policyFile)).digest("hex");
+  return !(choice?.choice === "discard" && choice.fileSha256 === sha);
 }
 
 export function readBaseline(root: string, inventoryPath = DEFAULT_INVENTORY_PATH): { text: string | null; inventory: Inventory | null } {
@@ -79,11 +90,30 @@ export function computeProjectState(root: string, inventoryPath = DEFAULT_INVENT
   const policyText = existsSync(policyFile) ? readFileSync(policyFile, "utf8") : null;
   const publishability = assessPublishable(policyText);
   const openQuestions = computeOpenQuestions(config, last, readDeferred(root));
+
+  // policyMode: generated. A policy file that SrcLawyer did not write (or that was edited) is never
+  // overwritten; the owner decides what happens to it. Text the owner is moving into settings, and the
+  // "last updated" date, are offered as optional questions.
+  const policyFileEdited = policyModeOf(config) === "generated" && policyFileNeedsDecision(root, policyFile);
+  if (policyFileEdited) {
+    openQuestions.unshift({ def: POLICY_FILE_DEF, reason: "attention", why: POLICY_FILE_DEF.why, blocking: true, deferred: false });
+    if (readPolicyChoice(root)?.choice === "move") {
+      for (const def of POLICY_TEXT_DEFS.filter((d) => d.id !== "policyText.lastUpdated")) {
+        const key = policyTextKeyOf(def.id)!;
+        if (!isPolicyTextAnswered(key, config)) openQuestions.push({ def, reason: "unanswered", why: def.why, blocking: false, deferred: false });
+      }
+    }
+  } else if (policyModeOf(config) === "generated" && baseline !== null) {
+    const lastUpdated = POLICY_TEXT_DEFS.find((d) => d.id === "policyText.lastUpdated")!;
+    if (!isPolicyTextAnswered("lastUpdated", config) && !readDeferred(root).includes(lastUpdated.id)) {
+      openQuestions.push({ def: lastUpdated, reason: "unanswered", why: lastUpdated.why, blocking: false, deferred: false });
+    }
+  }
   const blocking = openQuestions.filter((q) => q.blocking);
 
   const base = {
     ...publishability,
-    policyMode: "handwritten" as const,
+    policyMode: policyModeOf(config),
     policyPath: DEFAULT_POLICY_PATH,
     reviewHash: last?.reviewHash ?? null,
     openQuestions,
@@ -99,6 +129,9 @@ export function computeProjectState(root: string, inventoryPath = DEFAULT_INVENT
   }
   if (baseline === null) {
     return { ...base, state: "needs-setup", blockedBy: [{ code: "no-baseline", message: STATUS.noBaseline }], nextAction: { do: "run-command", command: "srclawyer scan --write-inventory" } };
+  }
+  if (policyFileEdited) {
+    return { ...base, state: "blocked", blockedBy: [{ code: "policy-file-edited", message: POLICY_FILE_DEF.ask }], nextAction: { do: "ask-user", questionId: POLICY_FILE_DEF.id } };
   }
   if (last?.result === "inconclusive") {
     return { ...base, state: "blocked", blockedBy: [{ code: "inconclusive", message: STATUS.inconclusive }], nextAction: { do: "run-update", command: "srclawyer update --json" } };
