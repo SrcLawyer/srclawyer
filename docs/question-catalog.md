@@ -24,7 +24,7 @@
 9. **[NEW r2] `explain` text for the six sensitive questions (section 1.5).** The assistant may read it to the owner. No recommendations.
 10. **[CHANGED r2] Section 8** is now "Decisions recorded".
 11. **[CHANGED r2] Appendix A and B:** approval wording, the `explain` instruction, and the generated-footer reference.
-12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), the messages of the assistant commands (section 9.4), and generated-mode file decisions and backups (section 9.5).
+12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), the messages of the assistant commands (section 9.4), generated-mode file decisions and backups (section 9.5), and the `agent-setup` messages (section 9.6).
 
 ---
 
@@ -345,6 +345,25 @@ The coverage sentence says files were skipped "(too large or unreadable)". The s
 - **Option labels for the `policy-file-edited` question** (section 1.3), as the assistant is given them: `Keep my changes and edit the policy by hand from now on` · `Move my changes into SrcLawyer's settings so the policy can keep updating itself (I'll help, and you approve each piece)` · `Throw them away and regenerate the policy (a backup copy is saved first)`.
 - **What each choice does.** *Keep my changes* sets `policyMode: handwritten`. *Throw them away* saves a backup now and lets the next regeneration replace exactly that version of the file. *Move my changes* changes nothing by itself: the assistant then asks for each piece of text (an introduction, extra sections, a closing) and records it as `policyText`, and when the owner is done they choose *Throw them away*.
 - **`update` in generated mode** regenerates `PRIVACY_POLICY.md` every time the scan is conclusive, with or without new items. If the file was edited it is not touched, `update` exits 2, and the first-edition refusal sentences from `scan` are printed (the two sentences in the README's "Editing the generated policy"). It no longer writes a separate `PRIVACY_POLICY.generated.md`, because the policy itself is regenerated.
+
+### 9.6 `agent-setup` messages **[NEW r2.3]**
+`srclawyer agent-setup` shows what it will write and writes only with a yes. For each file it prints `{path}: {what will happen}`, where what will happen is one of:
+- `will be created`
+- `a SrcLawyer section will be added at the end`
+- `the SrcLawyer section will be updated to this version`
+- `four permission rules will be added (everything else in the file is kept)`
+- `already up to date, no change`
+- `has been edited, so it was left alone`
+- `could not be read safely, so it was left alone`
+
+Then, as needed:
+- Prompts: `Write these changes? [y/N] ` and `Also add rules to .claude/settings.json so Claude Code always asks you before recording an answer or an approval? [y/N] `
+- When the permission rules are not included: `Claude Code permission rules are not included. Add --claude-ask-rules to include them.`
+- When it is run without a terminal and without `--yes`: `Nothing was written. Run again with --yes to write these changes, or with --dry-run to see them again.`
+- For a project with a `package.json` that does not list SrcLawyer: `Add SrcLawyer to this project at the version the instructions are pinned to, so the pinned command works: npm install --save-dev srclawyer@{version}`
+- At the end: `Nothing has been published or committed.`
+
+What it writes: one marked section in `AGENTS.md` (created if missing) and in `CLAUDE.md` only if that file already exists (never created, because creating it would change what Claude Code reads); the skill at `.claude/skills/srclawyer-privacy/SKILL.md`; and, only if the owner agrees, these four rules under `permissions.ask` in `.claude/settings.json`, so Claude Code always asks before an answer or an approval is recorded: `Bash(srclawyer answer *)`, `Bash(srclawyer approve *)`, `Bash(npx --no-install srclawyer answer *)` and `Bash(npx --no-install srclawyer approve *)`. An edited section or skill is never overwritten.
 
 ---
 

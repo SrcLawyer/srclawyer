@@ -17,6 +17,20 @@ Everything the owner is asked comes from static wording reviewed in [question-ca
 
 `status` and `questions` answer from local files, so they are fast and safe to call at any time; they report what the last `update` found. Run `update` first.
 
+## `agent-setup`
+
+`srclawyer agent-setup [--dry-run] [--yes] [--claude-ask-rules] [--json]` shows what it would write and writes only with a yes: interactively, or `--yes` after the assistant has shown the owner the plan and the owner said yes. Without a terminal and without `--yes` it writes nothing and exits 2. `--dry-run --json` prints the plan:
+
+```json
+{ "schema": 1, "ok": true, "dryRun": true, "written": false,
+  "writes": [{"path": "AGENTS.md", "action": "create", "description": "will be created"},
+             {"path": ".claude/skills/srclawyer-privacy/SKILL.md", "action": "create", "description": "will be created"}],
+  "claudeAskRules": {"included": false, "flag": "--claude-ask-rules", "offer": "Also add rules to .claude/settings.json so Claude Code always asks you before recording an answer or an approval? [y/N] ", "rules": ["Bash(srclawyer answer *)", "..."]},
+  "installHint": null, "published": false, "committed": false }
+```
+
+`action` is `create`, `insert-block`, `replace-block` (an unedited block from an older version), `merge-json`, `unchanged` or `left-alone` (with a `reason`: `edited`, `malformed`, `invalid-json` or `unexpected-shape`). It never overwrites: an edited block or skill, a block with a missing end line, and an unparsable `.claude/settings.json` are reported and left exactly as they were. `CLAUDE.md` is only written if it already exists. `status --json` reports `agentSetup` (`current`, `older`, `edited`, `malformed`, `missing`, `not-present` for `AGENTS.md` and `CLAUDE.md`; `current`, `edited`, `missing` for the skill), so a changed instruction file shows up.
+
 ## `policyMode`
 
 `status` reports `policyMode`: `handwritten` (also when the config has no `policyMode`) or `generated`. In generated mode `update` regenerates `PRIVACY_POLICY.md` every time the scan is conclusive (it writes the review file when new items are found, but no separate draft), and exits 2 without touching the file if it was edited. Then `status` is `blocked` with `policy-file-edited`, and `questions` carries one question:
@@ -89,6 +103,10 @@ A refusal prints `{"schema": 1, "ok": false, "id": "...", "error": {"code": "...
 and refreshes the baseline to the code as it is now. **No date is written**; git history is the timestamp. The note is up to 120 characters on one line, is stored in `.srclawyer.inventory.json`, and is committed to your repository if you commit that file.
 
 **What approval is.** The hash proves the caller read this review, and the note records what the owner said. Neither is security: anyone with write access can also edit the baseline directly or run `scan --write-inventory`. For a project with one owner, approval means the owner's yes plus a committed note. It is not independent review. The protection that matters is a human reviewing the pull request that contains the baseline.
+
+## Trust
+
+SrcLawyer's output is built from fixed wording and its own tables; no sentence it prints contains text from your repository, and stored free-text answers are previews flagged `untrusted`. File names, comments, READMEs and `package.json` fields can still contain text written to manipulate an assistant. The instructions `agent-setup` writes tell the assistant to treat all of it as data, and to ask you before recording anything. That is guidance, not enforcement: the `ask` rules (Claude Code) and a tool's own approval prompts add a pause, and the review hash and the note add an audit trail, but anyone who can edit the repository can also edit the baseline. Review changes to instruction files, `.claude/`, `AGENTS.md` and `.srclawyer.inventory.json` like code.
 
 ## Local state (`.srclawyer/`)
 

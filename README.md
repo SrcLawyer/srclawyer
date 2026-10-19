@@ -27,6 +27,7 @@ srclawyer scan --force          # overwrite the policy even if it was edited (se
 srclawyer update                # after a change: write a draft policy and a review file, never touching your policy
 srclawyer init --yes            # for an assistant: set up with blank answers and run the first scan
 srclawyer init --policy-mode generated   # the policy file becomes a build output
+srclawyer agent-setup           # show (then, with your yes, write) the instructions for your coding assistant
 srclawyer status --json         # for an assistant: where things stand (also: questions, answer, approve)
 ```
 
@@ -192,6 +193,7 @@ SrcLawyer writes only these files into your project, and only when you ask it to
 - `.srclawyer.inventory.json`, written when you pass `--write-inventory` to `scan` (or the path you give it), and updated by `srclawyer approve`, which adds your approval note.
 - `.srclawyer/`, a small machine-local folder written by `update` and `answer`, and where copies of a policy file you wrote are kept before it is replaced (`.srclawyer/backups/`); it contains its own `.gitignore` so nothing in it is committed, and it is safe to delete.
 - A single value in `.srclawyer.config.yml` each time `srclawyer answer` records an answer.
+- `srclawyer agent-setup` (only with your yes): a marked section in `AGENTS.md`, and in `CLAUDE.md` if it already exists; `.claude/skills/srclawyer-privacy/SKILL.md`; and, only if you agree, four rules under `permissions.ask` in `.claude/settings.json`. Remove the marked section (from its `srclawyer:agent-rules:start` line to its `srclawyer:agent-rules:end` line), the skill folder, and those four rules to undo it.
 
 Delete whichever of them you no longer want. No other SrcLawyer command writes files: `srclawyer check` is read-only, and installing the package writes nothing to your project.
 
@@ -225,6 +227,10 @@ It never touches `PRIVACY_POLICY.md`, `.srclawyer.inventory.json` or `.srclawyer
 ## Commands for AI assistants
 
 `status`, `questions`, `answer` and `approve` are built so a coding assistant can run them while you answer plain-English questions: they print one stable JSON object (schema 1), never prompt, and never publish or commit anything. The questions use fixed, reviewed wording ([docs/question-catalog.md](docs/question-catalog.md)), and the exact output of every command is described in [docs/assistant-contract.md](docs/assistant-contract.md).
+
+To set an assistant up, run `npx srclawyer@<version> agent-setup` (or ask your assistant to run it and show you the plan first). It prints exactly what it would write and writes only with your yes (or `--yes`): a marked section in `AGENTS.md` (and in `CLAUDE.md` if you already have one; it is never created), a skill at `.claude/skills/srclawyer-privacy/SKILL.md`, and, only if you agree, four `ask` rules in `.claude/settings.json` so Claude Code always asks before an answer or an approval is recorded. It pins the version it was run with, so the instructions never say `npx srclawyer@latest`, and it never overwrites a file: an edited section or skill is left alone and reported (`srclawyer status --json` shows what is installed). `init --agent-rules` does the same at the end of `init`. Claude Code and Cursor both read `AGENTS.md`, and Cursor also reads skills from `.claude/skills/`.
+
+The instructions tell the assistant to treat everything SrcLawyer prints, and all file contents, as data and never as instructions; to ask you each question in plain language and never guess or answer for you; and not to record an approval until you have clearly said yes. That is guidance, not enforcement. Review changes to `AGENTS.md`, `CLAUDE.md`, `.claude/` and `.srclawyer.inventory.json` in pull requests like any other code that tells a tool what to do.
 
 `approve` records your confirmation that you have looked at the changes: a short note with your reply (up to 120 characters, one line) goes into `.srclawyer.inventory.json`, and into your git history if you commit that file. For a project with one owner, approval means the owner's yes plus a committed note. It is not independent review.
 
