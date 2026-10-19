@@ -95,3 +95,16 @@ export const OPTION_LABELS = {
   unsure: "I'm not sure",
   noMinimum: "No minimum",
 } as const;
+
+// ---- First review (catalog section 9.7) ----
+export const FIRST_REVIEW = {
+  heading: "## What the scanner found in your code",
+  intro: "This is the first review of this project, so everything the scanner found is listed. Nothing has been approved yet.",
+  dataHeading: "### Kinds of personal data found",
+  servicesHeading: "### Third-party services found",
+  nothingFound: "The scanner found no personal data or third-party services in your code.",
+  summaryIntro: "This is the first review of this project. Nothing has been approved yet.",
+  uses: "Your code uses {Name}.",
+  handles: "Your code appears to handle {label in lower case}.",
+  handlesChildren: "Your code appears to handle information that may relate to children.",
+} as const;

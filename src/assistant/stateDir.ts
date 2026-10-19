@@ -17,6 +17,8 @@ export interface LastUpdate {
   /** SHA-256 of the baseline file the update compared against; the record is stale once the baseline changes. */
   baselineSha256: string;
   result: "no-drift" | "drift" | "inconclusive";
+  /** True when this was the first review of a baseline with no approval record. */
+  firstReview?: boolean;
   /** First 8 hex characters of the review file's hash; null when there was no drift. */
   reviewHash: string | null;
   /** Questions this drift raised, with the reason each is asked. */

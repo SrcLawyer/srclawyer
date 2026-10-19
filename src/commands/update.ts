@@ -31,6 +31,8 @@ export interface UpdateReport extends CheckReport, Partial<Publishability> {
   reviewHash: string | null;
   draft: MarkedWrite | null;
   review: MarkedWrite | null;
+  /** True on the first review of a baseline nobody has approved yet: the summary lists everything the scanner found. */
+  firstReview: boolean;
   state: ProjectStateName | null;
   openQuestionCount: number;
   nextAction: NextAction | null;
@@ -54,6 +56,7 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
     reviewHash: null,
     draft: null,
     review: null,
+    firstReview: false,
     state: null,
     openQuestionCount: 0,
     nextAction: null,
@@ -61,11 +64,16 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
   const config = loadConfig(root);
   const baselineText = readBaseline(root, options.inventoryPath).text;
 
-  if (report.result === "drift" && evaluation.scan && report.diff) {
-    const diff = report.diff;
-    const artifacts = buildUpdateArtifacts(evaluation, config);
+  const firstReview = report.result === "no-drift" && report.baseline !== null && !report.baseline.approved;
+  out.firstReview = firstReview;
+
+  if (((report.result === "drift" && report.diff) || firstReview) && evaluation.scan) {
+    const artifacts = buildUpdateArtifacts(evaluation, config, { firstReview });
+    const diff = firstReview
+      ? { added: { categories: evaluation.current?.categories ?? [], processors: evaluation.current?.processors ?? [] }, removed: { categories: [], processors: [] } }
+      : report.diff!;
     const dirAbs = join(root, options.outDir);
-    out.draft = writeMarkedFile(join(dirAbs, DRAFT_FILENAME), join(options.outDir, DRAFT_FILENAME), artifacts.draftBody);
+    if (!firstReview) out.draft = writeMarkedFile(join(dirAbs, DRAFT_FILENAME), join(options.outDir, DRAFT_FILENAME), artifacts.draftBody);
     out.review = writeMarkedFile(join(dirAbs, REVIEW_FILENAME), join(options.outDir, REVIEW_FILENAME), artifacts.reviewBody);
     out.reviewHash = artifacts.reviewHash;
     out.summary = artifacts.summary;
@@ -80,14 +88,16 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
     // Re-running update after the owner answered must not forget those answers: carry over the ones that
     // still belong to this drift (same baseline, same questions).
     const previous = readFreshLastUpdate(root, baselineText);
-    const triggeredIds = artifacts.questions.map((q) => q.def.id);
+    const triggeredIds = firstReview ? [] : artifacts.questions.map((q) => q.def.id);
     const record: LastUpdate = {
       schema: 1,
       srclawyerVersion: report.srclawyerVersion,
       baselineSha256: sha256(baselineText ?? ""),
-      result: "drift",
+      result: report.result === "drift" ? "drift" : "no-drift",
+      firstReview,
       reviewHash: artifacts.reviewHash,
-      triggered: artifacts.questions.map((q) => ({ id: q.def.id, why: q.why })),
+      // On a first review nothing changed, so nothing is re-confirmed; the open questions are just the blank ones.
+      triggered: firstReview ? [] : artifacts.questions.map((q) => ({ id: q.def.id, why: q.why })),
       answered: (previous?.answered ?? []).filter((id) => triggeredIds.includes(id)),
       diff: {
         addedCategories: diff.added.categories.map(categoryLabel),
@@ -127,8 +137,14 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
   if (options.format === "json") {
     console.log(JSON.stringify(out, null, 2));
   } else {
-    (report.result === "error" ? console.error : console.log)(renderCheckText(report, options.inventoryPath));
-    if (report.result === "drift") {
+    // On a first review there is no earlier approved review to compare with, so the "no new items" verdict
+    // would mislead: show what the scanner covered, then everything it found.
+    if (firstReview) {
+      if (report.coverage) console.log(report.coverage);
+    } else {
+      (report.result === "error" ? console.error : console.log)(renderCheckText(report, options.inventoryPath));
+    }
+    if (report.result === "drift" || firstReview) {
       console.log("");
       if (out.draft) console.log(out.draft.written ? COMMAND.draftWritten.replace("{path}", out.draft.path) : COMMAND.skippedEdited.replace("{path}", out.draft.path));
       if (out.review) console.log(out.review.written ? COMMAND.reviewWritten.replace("{path}", out.review.path) : COMMAND.skippedEdited.replace("{path}", out.review.path));

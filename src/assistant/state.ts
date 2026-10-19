@@ -32,6 +32,8 @@ export interface ProjectState extends Publishability {
   state: ProjectStateName;
   blockedBy: Array<{ code: string; message: string }>;
   policyMode: "handwritten";
+  /** Whether `srclawyer approve` has recorded an approval in the baseline. */
+  baselineApproved: boolean;
   policyPath: string;
   reviewHash: string | null;
   openQuestions: OpenQuestion[];
@@ -84,6 +86,7 @@ export function computeProjectState(root: string, inventoryPath = DEFAULT_INVENT
   const base = {
     ...publishability,
     policyMode: "handwritten" as const,
+    baselineApproved: baseline?.approval !== undefined,
     policyPath: DEFAULT_POLICY_PATH,
     reviewHash: last?.reviewHash ?? null,
     openQuestions,
@@ -109,8 +112,10 @@ export function computeProjectState(root: string, inventoryPath = DEFAULT_INVENT
   if (last === null) {
     return { ...base, state: "needs-update", blockedBy: [], nextAction: { do: "run-update", command: "srclawyer update --json" } };
   }
-  if (last.result === "drift" && last.reviewHash) {
+  if ((last.result === "drift" || last.firstReview) && last.reviewHash) {
     return { ...base, state: "needs-approval", blockedBy: [], nextAction: { do: "ask-user-to-confirm", reviewHash: last.reviewHash } };
   }
+  // A baseline with no approval record has never been approved, however clean the last update was.
+  if (baseline.approval === undefined) return { ...base, state: "needs-update", blockedBy: [], nextAction: { do: "run-update", command: "srclawyer update --json" } };
   return { ...base, state: "up-to-date", blockedBy: [], nextAction: { do: "none" } };
 }

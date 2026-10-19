@@ -340,6 +340,26 @@ The coverage sentence now says files were `skipped or only partly analyzed` (sec
 - **`status` without `--json`:** the lines `State: {state}` and `Ready to publish: yes` or `no`, followed by the blocker and warning sentences above and the question-count sentence from section 3.2.
 - **`answer` refusals** are technical, not shown to the owner: for example `Use true, false or unsure.` and `That doesn't look like an email address.` The assistant relays them in its own words.
 
+### 9.7 The first review **[NEW r2.5]**
+A baseline written by `init` or `scan --write-inventory` has **no approval record**. `status` therefore does not say `up-to-date` until the first `approve`, and the first `update` after it is a *first review*: there is nothing earlier to compare with, so everything the scanner found is listed as found (not as new), and nothing is called "no new items". The exit code is unchanged (0 when the baseline matches the code).
+
+In the review file, instead of section 3.3's "What changed since your last approved review":
+- Heading: `## What the scanner found in your code`
+- First line under it: `This is the first review of this project, so everything the scanner found is listed. Nothing has been approved yet.`
+- Sub-headings: `### Kinds of personal data found` and `### Third-party services found`
+- If there is nothing: `The scanner found no personal data or third-party services in your code.`
+- The suggested-wording section is as in 3.3. The questions listed are the ones still blank (nothing changed, so none is a "please confirm your earlier answer").
+
+In the summary lines (section 3.2), a first review starts with `This is the first review of this project. Nothing has been approved yet.` and then, one line each:
+- `Your code uses {Name}.`
+- `Your code appears to handle {label in lower case}.`
+- `Your code appears to handle information that may relate to children.` (instead of the line above, for children's data)
+- or, if there is nothing: `The scanner found no personal data or third-party services in your code.`
+
+followed by the question, blank and "Nothing has been published or committed." lines of section 3.2.
+
+**`check`** compares only data kinds and services, so a baseline with no approval record is treated exactly like an approved one: exit 0 when it matches the code, 1 on new or removed items. `check --json` reports `baseline.approved` so a pipeline can see whether an approval is recorded, but `check` never requires one.
+
 ---
 
 ## Appendix A. Assistant instructions (rules block, written to `AGENTS.md`) **[CHANGED r2]**
