@@ -13,7 +13,7 @@ import { runPythonSdkRules } from "../rules/pythonSdkRules.js";
 import { runPythonFrameworkRules } from "../rules/pythonFrameworkRules.js";
 import { findZodCandidates, type ZodCandidate } from "../rules/zodPreFilter.js";
 import { buildTsProject, type TsProjectHandle } from "./tsProject.js";
-import { runHtmlInputRules, extractInlineScriptsBounded } from "../rules/htmlRules.js";
+import { runHtmlInputRules, runHtmlScriptHostRules, extractInlineScriptsBounded } from "../rules/htmlRules.js";
 import {
   containsTemplateSyntax,
   isOversizedFile,
@@ -239,6 +239,7 @@ export async function scan(root: string, options: ScanEngineOptions = {}): Promi
 
     try {
       findings.push(...runHtmlInputRules(html, filePath, root));
+      findings.push(...runHtmlScriptHostRules(html, filePath, root));
     } catch {
       recordSkip(filePath, "analysis-failed");
     }

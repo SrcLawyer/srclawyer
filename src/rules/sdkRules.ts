@@ -4,6 +4,7 @@ import type { TraverseOptions } from "@babel/traverse";
 import { relative } from "node:path";
 import type { Finding } from "../engine/types.js";
 import { PROCESSOR_PROFILES } from "./processorProfiles.js";
+import { VENDORS, npmPatterns } from "./vendors.js";
 import { redactSecrets } from "../engine/secretRedaction.js";
 
 type TraverseFn = (ast: Node, visitor: TraverseOptions) => void;
@@ -24,6 +25,8 @@ const SDK_MATCHERS: SdkMatcher[] = [
   { processorKey: "auth0", packagePatterns: [/^auth0$/, /^@auth0\//] },
   { processorKey: "firebase", packagePatterns: [/^firebase$/, /^firebase-admin/, /^@firebase\//] },
   { processorKey: "cognito", packagePatterns: [/^amazon-cognito-identity-js$/, /^@aws-sdk\/client-cognito-identity-provider$/] },
+  // Vendors added in 0.9.0; package names are sourced in vendors.ts.
+  ...VENDORS.filter((v) => v.npm.length > 0).map((v) => ({ processorKey: v.key, packagePatterns: npmPatterns(v) })),
 ];
 
 function matchProcessor(source: string): SdkMatcher | undefined {

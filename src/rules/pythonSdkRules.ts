@@ -2,6 +2,7 @@ import { relative } from "node:path";
 import type { Node, Tree } from "web-tree-sitter";
 import type { Finding } from "../engine/types.js";
 import { PROCESSOR_PROFILES } from "./processorProfiles.js";
+import { VENDORS } from "./vendors.js";
 import { redactSecrets } from "../engine/secretRedaction.js";
 
 interface SdkMatcher {
@@ -28,6 +29,8 @@ const SDK_MATCHERS: SdkMatcher[] = [
   { processorKey: "auth0", moduleNames: ["auth0"] },
   // PyPI package is "firebase-admin"; its import root is firebase_admin.
   { processorKey: "firebase", moduleNames: ["firebase_admin"] },
+  // Vendors added in 0.9.0; module names are sourced in vendors.ts.
+  ...VENDORS.filter((v) => v.pypi.length > 0).map((v) => ({ processorKey: v.key, moduleNames: v.pypi })),
 ];
 
 function matchProcessor(moduleRoot: string): SdkMatcher | undefined {
