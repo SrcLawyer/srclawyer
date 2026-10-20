@@ -3,6 +3,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { VENDORS, type VendorSource } from "../src/rules/vendors.js";
+import { SERVICE_FEATURES, featureKey } from "../src/rules/serviceFeatures.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -67,7 +68,10 @@ async function fetchPage(url: string): Promise<string> {
 
 export async function verifyAll(): Promise<SourceCheck[]> {
   const pages = new Map<string, Promise<string>>();
-  const all: Array<{ vendor: string; source: VendorSource }> = VENDORS.flatMap((v) => v.sources.map((source) => ({ vendor: v.key, source })));
+  const all: Array<{ vendor: string; source: VendorSource }> = [
+    ...VENDORS.flatMap((v) => v.sources.map((source) => ({ vendor: v.key, source }))),
+    ...SERVICE_FEATURES.flatMap((f) => f.sources.map((source) => ({ vendor: `feature ${featureKey(f)}`, source }))),
+  ];
   const results: SourceCheck[] = [];
   for (const { vendor, source } of all) {
     if (!pages.has(source.url)) pages.set(source.url, fetchPage(source.url));

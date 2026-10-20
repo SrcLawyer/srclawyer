@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { VENDORS, type VendorEntry } from "../src/rules/vendors.js";
 import { DATA_CATEGORY_LABELS } from "../src/policy/dataCategoryLabels.js";
+import { SERVICE_FEATURES, NOT_MOVED, SERVICE_FEATURES_VERIFIED, featureKey, evidentCategories } from "../src/rules/serviceFeatures.js";
+import { PROCESSOR_PROFILES } from "../src/rules/processorProfiles.js";
 import { verifyAll } from "./verifyVendors.js";
 
 const checks = await verifyAll();
@@ -65,6 +67,25 @@ for (const v of VENDORS) {
     ""
   );
 }
+
+lines.push(
+  "# Categories moved to \"may be collected through services you use\"",
+  "",
+  `Checked ${SERVICE_FEATURES_VERIFIED}. These data kinds are handled by a service only through an optional feature or setting. They are still in the profile (so the baseline and drift are unchanged), but the generated policy lists them under **May Be Collected Through Services You Use** until the owner says they use the feature (docs/question-catalog.md section 10). Each row quotes the vendor's own documentation for both the data and the condition.`,
+  "",
+  "| Service | Feature (asked as a question) | Moved | Stays certain | Quote: handles it | Quote: why optional |",
+  "|---|---|---|---|---|---|"
+);
+for (const f of SERVICE_FEATURES) {
+  const profile = PROCESSOR_PROFILES[f.profileKey]!;
+  const quoteFor = (about: string) => f.sources.filter((s) => s.about === about).map((s) => `"${cell(s.quote)}" ([${new URL(s.url).host}](${s.url}))`);
+  const handles = [...new Set(f.categories.flatMap((c) => quoteFor(`category:${c}`)))].join("<br>");
+  lines.push(
+    `| ${profile.name} (\`${f.profileKey}\`) | ${f.feature}: "${cell(f.ask)}" | ${f.categories.map(labelOf).join(", ")} | ${evidentCategories(f.profileKey, profile.dataCategories).map(labelOf).join(", ") || "none"} | ${handles} | ${quoteFor("condition").join("<br>")} |`
+  );
+}
+lines.push("", "Looked at and **not** moved:", "", ...NOT_MOVED.map((n) => `- **${n.name}**: ${n.reason}`));
+lines.push("", `_The features keyed \`${SERVICE_FEATURES.map(featureKey).join("\`, \`")}\` are the \`serviceUse\` keys in the config._`, "");
 
 const out = join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "vendor-sources.md");
 writeFileSync(out, lines.join("\n"));

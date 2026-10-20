@@ -9,6 +9,7 @@ import {
   TRIGGER_WHY_TEMPLATES,
 } from "../src/assistant/questions.js";
 import * as W from "../src/assistant/wording.js";
+import { SERVICE_FEATURES } from "../src/rules/serviceFeatures.js";
 import { RULES_END, SKILL_TEXT, rulesBlock, CLAUDE_ASK_RULES } from "../src/assistant/agentText.js";
 import { GENERATED_FOOTER, GENERATED_HEADER_COMMENT, NO_MINIMUM_AGE_SENTENCE } from "../src/policy/generatePolicy.js";
 
@@ -63,6 +64,14 @@ describe("docs/question-catalog.md matches the code", () => {
 
   it("contains the first-review wording", () => {
     for (const text of strings(W.FIRST_REVIEW)) expectInDoc(text);
+  });
+
+  it("contains the services-you-use wording and every feature question", () => {
+    for (const text of strings(W.SERVICE_SECTION)) expectInDoc(text);
+    for (const f of SERVICE_FEATURES) {
+      expectInDoc(f.ask, f.ask);
+      expectInDoc(f.why, f.why);
+    }
   });
 
   it("the Action's copy of the no-drift statement is the approved sentence", () => {

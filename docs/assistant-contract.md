@@ -31,6 +31,10 @@ Everything the owner is asked comes from static wording reviewed in [question-ca
 
 `action` is `create`, `insert-block`, `replace-block` (an unedited block from an older version), `merge-json`, `unchanged` or `left-alone` (with a `reason`: `edited`, `malformed`, `invalid-json` or `unexpected-shape`). It never overwrites: an edited block or skill, a block with a missing end line, and an unparsable `.claude/settings.json` are reported and left exactly as they were. `CLAUDE.md` is only written if it already exists. `status --json` reports `agentSetup` (`current`, `older`, `edited`, `malformed`, `missing`, `not-present` for `AGENTS.md` and `CLAUDE.md`; `current`, `edited`, `missing` for the skill), so a changed instruction file shows up.
 
+## Services you use
+
+For each service found in the code, `questions` also lists an optional yes/no question per feature the service handles data through (`service.<profile>.<feature>`, for example `service.supabase.auth`, `service.posthog.ip-capture`). They are never blocking, never sensitive, and need no note. `answer service.supabase.auth true|false|unsure` stores the answer under `serviceUse` in the config; `unsure` stores nothing and stops the question being re-asked on this machine. An unanswered one is not a blank: the policy lists the item under "May Be Collected Through Services You Use" and `publishableWarnings` gets an `unconfirmed-service-feature` entry with the number of items. `update` asks about the features of the services a change added (or all of them, on a first review). The baseline, `check` and the exit codes are unchanged.
+
 ## `policyMode`
 
 `status` reports `policyMode`: `handwritten` (also when the config has no `policyMode`) or `generated`. In generated mode `update` regenerates `PRIVACY_POLICY.md` every time the scan is conclusive (it writes the review file when new items are found, but no separate draft), and exits 2 without touching the file if it was edited. Then `status` is `blocked` with `policy-file-edited`, and `questions` carries one question:
@@ -107,6 +111,8 @@ A refusal prints `{"schema": 1, "ok": false, "id": "...", "error": {"code": "...
 ```
 
 and refreshes the baseline to the code as it is now. **No date is written**; git history is the timestamp. The note is up to 120 characters on one line, is stored in `.srclawyer.inventory.json`, and is committed to your repository if you commit that file.
+
+`approve` also leaves the project up to date: its output carries `state` (`up-to-date` unless something else is open) and `nextAction`, and `status` says the same straight afterwards, without another `update`. Questions named in `--allow-unanswered` are not asked again on this machine.
 
 **What approval is.** The hash proves the caller read this review, and the note records what the owner said. Neither is security: anyone with write access can also edit the baseline directly or run `scan --write-inventory`. For a project with one owner, approval means the owner's yes plus a committed note. It is not independent review. The protection that matters is a human reviewing the pull request that contains the baseline.
 
