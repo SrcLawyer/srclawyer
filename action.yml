@@ -6,7 +6,7 @@ description: >-
 inputs:
   srclawyer-version:
     description: >-
-      The SrcLawyer CLI to run, pinned: an exact version (for example 0.8.0), or
+      The SrcLawyer CLI to run, pinned: an exact version (for example 0.9.0), or
       github:SrcLawyer/srclawyer#<40-character commit sha>. latest, ranges and branch names are rejected.
     required: true
   inventory-path:

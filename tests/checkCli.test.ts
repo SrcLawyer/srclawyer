@@ -32,7 +32,7 @@ describe("the real CLI: scan --write-inventory, then check", () => {
 
     const clean = cli(root, ["check"]);
     expect(clean.status).toBe(0);
-    expect(clean.stdout).toContain("no drift");
+    expect(clean.stdout).toContain("no new items found by the scanner");
 
     writeFiles(root, { "src/sms.js": 'import twilio from "twilio";\n' });
     const drifted = cli(root, ["check"]);

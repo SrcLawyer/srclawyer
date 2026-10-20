@@ -1,6 +1,6 @@
 {
   "name": "srclawyer",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Static analysis engine that derives privacy policy documentation directly from source code",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
@@ -32,7 +32,9 @@
     "test:corpus": "tsx scripts/scoreCorpus.ts",
     "test:corpus:update-baseline": "tsx scripts/scoreCorpus.ts --update-baseline",
     "test:corpus:with-llm": "node --env-file=.env node_modules/.bin/tsx scripts/scoreCorpus.ts --with-llm",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:vendors": "tsx scripts/verifyVendors.ts",
+    "docs:vendors": "tsx scripts/generateVendorDoc.ts"
   },
   "dependencies": {
     "@babel/parser": "^7.25.6",

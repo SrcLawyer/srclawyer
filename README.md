@@ -4,7 +4,7 @@ Static analysis engine that derives privacy policy documentation directly from s
 
 > **Beta.** The CLI (`init`, `scan`), the Layer 1 static analysis engine, and markdown privacy policy generation all work today. JavaScript/TypeScript (Express, Next.js) is the most tested path; Python (Flask) is newer, with FastAPI and Django explicitly detected and flagged as unsupported rather than silently skipped — see [Supported languages and frameworks](#supported-languages-and-frameworks) and [Known gaps](#known-gaps) below. Optional AI-assisted review of ambiguous findings (Layer 2) is available as an advanced option with your own Anthropic API key — see [AI-assisted review](#ai-assisted-review-advanced) below; a hosted tier that needs no key is planned but not yet available.
 >
-> Scanning is manual-only (`srclawyer scan`, run on demand) — this is the free/solo tier's permanent behavior, not a placeholder. Automatic CI/CD updating (a scan that runs itself on every PR, or on a schedule) isn't available yet; it's scoped for a future paid/team tier. See `PRODUCT_SPEC.md` Section 8.5 for the plan.
+> SrcLawyer runs when you ask it to: `scan` and `update` on your machine, `check` locally or in CI, and the GitHub Action's drift check on pull requests and on a schedule. All of this is free during the beta.
 
 ## Usage
 
@@ -24,6 +24,11 @@ srclawyer scan                  # analyze the codebase and write PRIVACY_POLICY.
 srclawyer scan --json           # findings as JSON (still writes the policy file)
 srclawyer scan --out docs/privacy.md
 srclawyer scan --force          # overwrite the policy even if it was edited (see below)
+srclawyer update                # after a change: write a draft policy and a review file, never touching your policy
+srclawyer init --yes            # for an assistant: set up with blank answers and run the first scan
+srclawyer init --policy-mode generated   # the policy file becomes a build output
+srclawyer agent-setup           # show (then, with your yes, write) the instructions for your coding assistant
+srclawyer status --json         # for an assistant: where things stand (also: questions, answer, approve)
 ```
 
 If `srclawyer` isn't found right after a global install, see [Troubleshooting: command not found](#troubleshooting-command-not-found) below.
@@ -97,7 +102,7 @@ If none of this resolves it, `npx srclawyer scan` (see [Usage](#usage) above) si
 
 ## What `scan` does today
 
-- **Known SDK integrations** (import/require detection): Stripe, SendGrid, Twilio, Google Analytics, Mixpanel, Auth0, Firebase, Cognito for JS/TS; Stripe, SendGrid, Twilio, Mixpanel, Auth0, Firebase for Python — each mapped to the data categories it typically processes (`src/rules/processorProfiles.ts`).
+- **Known SDK integrations** (import/require detection): Stripe, SendGrid, Twilio, Google Analytics, Mixpanel, Auth0, Firebase, Cognito, Supabase, Clerk, PostHog, Vercel Analytics, Sentry, Resend, OpenAI, Anthropic, Stripe.js, Intercom and Segment for JS/TS; Stripe, SendGrid, Twilio, Mixpanel, Auth0, Firebase, Supabase, PostHog, Sentry, Resend, OpenAI and Anthropic for Python. In HTML files, `<script src>` tags for Stripe.js, Intercom, PostHog, Sentry's loader and Segment are detected too. Each is mapped to the data categories it typically processes (`src/rules/processorProfiles.ts`); the vendors added in 0.9.0 are listed with a quote from the vendor's own documentation behind every package name, host and category in [docs/vendor-sources.md](docs/vendor-sources.md).
 - **Request-body field collection** in Express (`req.body.x`, destructured `req.body`) and Next.js (both `pages/api` and the app router's `await request.json()`), and in **Flask** (`request.form`/`.json`/`.args`, both subscript and `.get(...)` forms), classified against a field-name lexicon (`src/rules/dataCategoryLexicon.ts`). In both languages, a value assigned to a local variable earlier in the *same function* (`const body = req.body` / `data = request.get_json()`) is tracked one mechanical hop, so a later `body.email` / `data['email']` is still caught — not just the direct, unaliased form.
 - **OpenAPI/Swagger schemas** (`components.schemas.*.properties`) and **GraphQL SDL** type/input fields.
 - **HTML forms and inline scripts** (`src/rules/htmlRules.ts`): native `<input>` elements classified by `type` (password/email/tel are unambiguous native signals) or by `id`/`name` against the lexicon; inline `<script>` blocks are extracted and run through the same SDK/framework/web-API rules as any other file.
@@ -162,9 +167,9 @@ npx srclawyer check                      # exit 0 no drift, 1 drift, 2 error, 3 
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: SrcLawyer/srclawyer@v0.8.0
+- uses: SrcLawyer/srclawyer@v0.9.0
   with:
-    srclawyer-version: 0.8.0             # required and pinned
+    srclawyer-version: 0.9.0             # required and pinned
 ```
 
 Drift fails the check, and the step summary lists what was added and removed with a one-line fix. If no verdict can be reached — the confidence service is unreachable, files were skipped, or the baseline and the run used different file discovery — the result is **inconclusive**, a warning by default, and is never reported as drift. The Action needs no secrets and `contents: read`; an optional pull-request comment needs `pull-requests: write`. Inside a git repository, `check` and `--write-inventory` look only at tracked and untracked-but-not-ignored files, so a gitignored build directory can't cause phantom drift; plain `scan` is unchanged. `check` makes the same network calls as `scan` (below) and never calls an AI provider.
@@ -180,11 +185,15 @@ Drift fails the check, and the step summary lists what was added and removed wit
 
 ## Removing SrcLawyer
 
-SrcLawyer writes at most three files into your project, and only when you ask it to:
+SrcLawyer writes only these files into your project, and only when you ask it to:
 
 - `.srclawyer.config.yml`, written by `srclawyer init`.
 - `PRIVACY_POLICY.md`, written by `srclawyer scan` (or the path you give `--out`) unless that file has been edited, in which case [it is left alone](#editing-the-generated-policy).
-- `.srclawyer.inventory.json`, written only when you pass `--write-inventory` to `scan` (or the path you give it).
+- `PRIVACY_POLICY.generated.md` and `PRIVACY_POLICY.review.md`, written by `srclawyer update` when it finds new items (in the folder you pass to `--out-dir`, by default the project root).
+- `.srclawyer.inventory.json`, written when you pass `--write-inventory` to `scan` (or the path you give it), and updated by `srclawyer approve`, which adds your approval note.
+- `.srclawyer/`, a small machine-local folder written by `update` and `answer`, and where copies of a policy file you wrote are kept before it is replaced (`.srclawyer/backups/`); it contains its own `.gitignore` so nothing in it is committed, and it is safe to delete.
+- A single value in `.srclawyer.config.yml` each time `srclawyer answer` records an answer.
+- `srclawyer agent-setup` (only with your yes): a marked section in `AGENTS.md`, and in `CLAUDE.md` if it already exists; `.claude/skills/srclawyer-privacy/SKILL.md`; and, only if you agree, four rules under `permissions.ask` in `.claude/settings.json`. Remove the marked section (from its `srclawyer:agent-rules:start` line to its `srclawyer:agent-rules:end` line), the skill folder, and those four rules to undo it.
 
 Delete whichever of them you no longer want. No other SrcLawyer command writes files: `srclawyer check` is read-only, and installing the package writes nothing to your project.
 
@@ -195,6 +204,39 @@ To remove the command-line tool:
 ```bash
 npm uninstall -g srclawyer
 ```
+
+## Policy as a build output (`policyMode: generated`)
+
+By default the policy file becomes yours once you edit it (see above). If you would rather never edit it, set `policyMode: generated` (`srclawyer init --policy-mode generated`, or add the line to `.srclawyer.config.yml`). Without the line, nothing changes.
+
+In generated mode the policy is a **build output**. All your input goes in `.srclawyer.config.yml`: the answers to the `init` questions, and a `policyText` block for your own words (`intro`, `closing`, `lastUpdated` and `additionalSections`, each shown exactly as you write it). `scan` and `update` regenerate `PRIVACY_POLICY.md` every time, with or without new items, so filling in an answer fills the blank in the next run. A generated policy shows no file names, line numbers or source lines, ends with `_Generated by SrcLawyer from static analysis of this codebase._`, and begins with an HTML comment (invisible when the Markdown is rendered, present in the file and in the page source if you publish it as is) saying to change your answers, not the file. SrcLawyer never adds a "last updated" date; it appears only if you set `policyText.lastUpdated` yourself.
+
+Your edits are still never lost. If `PRIVACY_POLICY.md` has changes SrcLawyer didn't make, `scan` and `update` leave it alone and exit 2, and an assistant (or you) chooses what happens next: keep your changes and go back to editing by hand (`policyMode: handwritten`), move your text into `policyText`, or throw your changes away and regenerate. Whenever a file you wrote is replaced, `--force` included, a copy is saved first in `.srclawyer/backups/`. `srclawyer status --json` reports `publishable`, which is `false` while the policy still has a `[TO COMPLETE]` blank or an "incomplete scan" warning.
+
+## Services you use, and the data they may handle
+
+Some services handle a kind of personal data only if you use one of their features or settings: Supabase's sign-in service (email, phone, credentials), PostHog's and Sentry's IP-address settings, Stripe's optional customer name, email and address, and so on. SrcLawyer finds the service in your code, but it cannot see which features you use, so the generated policy does not claim the data. It lists it under **May Be Collected Through Services You Use**, which says the list describes what each service documents and does not say your product collects it, until you answer one yes/no question per feature (`srclawyer answer service.supabase.auth true`, or ask your assistant). **Yes** moves the data into "Data We Collect"; **No** leaves it out; **I'm not sure** keeps it listed. The questions are optional: an unanswered one never blocks `publishable`, it adds a warning with a count. Your answers are stored in `.srclawyer.config.yml` under `serviceUse`. The baseline, `check` and the exit codes do not change: the data kinds stay in the baseline, so a change in the code is still reviewed. [docs/vendor-sources.md](docs/vendor-sources.md) shows, for every feature, the vendor's own words about the data and about why it is optional.
+
+## Draft and review file (`srclawyer update`)
+
+`srclawyer update` runs the same scan and comparison as `check`. When it finds new items it writes two files next to your policy and changes nothing else:
+
+- `PRIVACY_POLICY.generated.md`: the policy `scan` would write now, for you to compare with yours.
+- `PRIVACY_POLICY.review.md`: a short plain-English list of what changed (new kinds of data, new services, things no longer found), suggested wording for each new item, and the questions the change raises (for example, whether your app now sends data to an AI service). It contains no file names, line numbers or dates.
+
+It never touches `PRIVACY_POLICY.md`, `.srclawyer.inventory.json` or `.srclawyer.config.yml`, and never calls an AI provider. Both files carry the same end marker as the policy, so a fresh `update` replaces them cleanly, and an edited copy is left alone. Exit codes are `check`'s: 0 nothing new, 1 new items found, 2 error, 3 inconclusive. Use `--out-dir <dir>` to write the files elsewhere.
+
+`scan`, `check` and `update` each print one **coverage** line saying what the scan covered (languages and frameworks, how many files, how many known third-party services) and what it did not. A clean result means **no new items found by the scanner since your last approved review**; it is not a statement that your product or your policy is compliant.
+
+## Commands for AI assistants
+
+`status`, `questions`, `answer` and `approve` are built so a coding assistant can run them while you answer plain-English questions: they print one stable JSON object (schema 1), never prompt, and never publish or commit anything. The questions use fixed, reviewed wording ([docs/question-catalog.md](docs/question-catalog.md)), and the exact output of every command is described in [docs/assistant-contract.md](docs/assistant-contract.md).
+
+To set an assistant up, run `npx srclawyer@<version> agent-setup` (or ask your assistant to run it and show you the plan first). It prints exactly what it would write and writes only with your yes (or `--yes`): a marked section in `AGENTS.md` (and in `CLAUDE.md` if you already have one; it is never created), a skill at `.claude/skills/srclawyer-privacy/SKILL.md`, and, only if you agree, four `ask` rules in `.claude/settings.json` so Claude Code always asks before an answer or an approval is recorded. It pins the version it was run with, so the instructions never say `npx srclawyer@latest`, and it never overwrites a file: an edited section or skill is left alone and reported (`srclawyer status --json` shows what is installed). `init --agent-rules` does the same at the end of `init`. Claude Code and Cursor both read `AGENTS.md`, and Cursor also reads skills from `.claude/skills/`.
+
+The instructions tell the assistant to treat everything SrcLawyer prints, and all file contents, as data and never as instructions; to ask you each question in plain language and never guess or answer for you; and not to record an approval until you have clearly said yes. That is guidance, not enforcement. Review changes to `AGENTS.md`, `CLAUDE.md`, `.claude/` and `.srclawyer.inventory.json` in pull requests like any other code that tells a tool what to do.
+
+`approve` records your confirmation that you have looked at the changes: a short note with your reply (up to 120 characters, one line) goes into `.srclawyer.inventory.json`, and into your git history if you commit that file. For a project with one owner, approval means the owner's yes plus a committed note. It is not independent review.
 
 ## Network calls
 

@@ -13,6 +13,7 @@ import {
 } from "../config/config.js";
 import { NETWORK_CALLS_NOTICE, byokNetworkNotice } from "../policy/legalNotices.js";
 import { DEFAULT_POLICY_PATH, SUGGESTED_DRAFT_PATH, checkPolicyWrite } from "../policy/policyGuard.js";
+import { DEFAULT_INVENTORY_PATH } from "../inventory/inventory.js";
 import { runScan } from "./scan.js";
 
 export interface InitFlags {
@@ -29,6 +30,13 @@ export interface InitFlags {
   accountDeletionInstructions?: string;
   minimumAge?: number;
   sendsDataToAiServices?: boolean;
+  /**
+   * Non-interactive: write the config with every answer left blank, then run the first scan and write the
+   * baseline. Meant for an assistant that will ask the owner the questions afterwards.
+   */
+  yes?: boolean;
+  /** Written to the config: "generated" makes the policy a build output (scan and update always regenerate it). */
+  policyMode?: "generated" | "handwritten";
   /** Advanced, opt-in: sets tier: byok. Never asked about in the default flow. */
   enableAiReview?: boolean;
   apiKeyEnvVar?: string;
@@ -133,6 +141,14 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
 
   if (hasUnmigratedLegacyConfig(root)) {
     console.log(legacyConfigMessage());
+    return;
+  }
+
+  if (flags.yes) {
+    console.log(`${NETWORK_CALLS_NOTICE}\n`);
+    writeConfig(root, { ...DEFAULT_CONFIG, ...(flags.policyMode ? { policyMode: flags.policyMode } : {}) });
+    console.log(`Wrote ${CONFIG_FILENAME}.`);
+    await runScan(root, { json: false, out: DEFAULT_POLICY_PATH, llm: false, writeInventory: DEFAULT_INVENTORY_PATH });
     return;
   }
 
@@ -242,7 +258,7 @@ export async function runInit(root: string, flags: InitFlags = {}): Promise<void
     sendsDataToAiServices,
   };
 
-  writeConfig(root, config);
+  writeConfig(root, flags.policyMode ? { ...config, policyMode: flags.policyMode } : config);
   console.log(`\nWrote ${CONFIG_FILENAME}. Run "srclawyer scan" to analyze this codebase.`);
 
   let runScanNow = false;
