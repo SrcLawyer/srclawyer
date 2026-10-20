@@ -2,6 +2,10 @@ import type { DataCategory, Finding, ScanResult } from "../engine/types.js";
 import { CONFIG_FILENAME, POLICY_TEXT_LIMITS, policyModeOf, type SrcLawyerConfig } from "../config/config.js";
 import { DATA_CATEGORY_LABELS } from "./dataCategoryLabels.js";
 import { MANDATORY_DISCLAIMER } from "./disclaimer.js";
+import { PROCESSOR_PROFILES } from "../rules/processorProfiles.js";
+import { SERVICE_FEATURES, featureKey, featuresFor, type ServiceFeature } from "../rules/serviceFeatures.js";
+import { joinNames, lowerLabel } from "../assistant/labels.js";
+import { SERVICE_SECTION } from "../assistant/wording.js";
 
 function locationRef(finding: Finding): string {
   return `${finding.location.file}:${finding.location.line}`;
@@ -15,10 +19,32 @@ function effectiveDescription(finding: Finding): string {
   return finding.llmResolution?.resolvedDescription ?? finding.description;
 }
 
-function groupByCategory(findings: Finding[]): Map<DataCategory, Finding[]> {
+/** The processor-profile key an SDK finding came from (`sdk:<key>:<file>:<line>`), or null for any other finding. */
+export function profileKeyOf(finding: Finding): string | null {
+  return finding.source === "sdk-rule" ? (/^sdk:([^:]+):/.exec(finding.id)?.[1] ?? null) : null;
+}
+
+type FeatureState = "yes" | "no" | "open";
+
+function featureState(config: SrcLawyerConfig | null, feature: ServiceFeature): FeatureState {
+  const answer = config?.serviceUse?.[featureKey(feature)];
+  return answer === true ? "yes" : answer === false ? "no" : "open";
+}
+
+/** The feature that qualifies `category` for the service this finding came from, if the category is conditional there. */
+function conditionalFeatureFor(finding: Finding, category: DataCategory): ServiceFeature | null {
+  const key = profileKeyOf(finding);
+  return key ? (featuresFor(key).find((f) => f.categories.includes(category)) ?? null) : null;
+}
+
+function groupByCategory(findings: Finding[], config: SrcLawyerConfig | null): Map<DataCategory, Finding[]> {
   const byCategory = new Map<DataCategory, Finding[]>();
   for (const finding of findings) {
     for (const category of effectiveCategories(finding)) {
+      // A data kind a service handles only through an optional feature is not listed as collected until
+      // the owner says they use the feature; until then it appears under the "may be collected" section.
+      const feature = finding.llmResolution?.resolvedDataCategories ? null : conditionalFeatureFor(finding, category);
+      if (feature && featureState(config, feature) !== "yes") continue;
       const existing = byCategory.get(category) ?? [];
       existing.push(finding);
       byCategory.set(category, existing);
@@ -27,8 +53,8 @@ function groupByCategory(findings: Finding[]): Map<DataCategory, Finding[]> {
   return byCategory;
 }
 
-function renderCategorySections(confidentFindings: Finding[], showLocations: boolean): string[] {
-  const byCategory = groupByCategory(confidentFindings);
+function renderCategorySections(confidentFindings: Finding[], showLocations: boolean, config: SrcLawyerConfig | null): string[] {
+  const byCategory = groupByCategory(confidentFindings, config);
   const sections: string[] = [];
 
   for (const [category, findings] of [...byCategory.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
@@ -42,6 +68,29 @@ function renderCategorySections(confidentFindings: Finding[], showLocations: boo
   }
 
   return sections;
+}
+
+/**
+ * "May Be Collected Through Services You Use": the data kinds a service handles only through an optional
+ * feature, for each feature the owner has not yet said they use or do not use. A feature answered yes is
+ * listed as collected in the main section instead; one answered no is left out. FOR ATTORNEY REVIEW:
+ * docs/question-catalog.md section 10.
+ */
+function renderServiceFeatureSection(confidentFindings: Finding[], config: SrcLawyerConfig | null): string | null {
+  const seen = new Set<string>();
+  const bullets: string[] = [];
+  for (const finding of confidentFindings) {
+    const key = profileKeyOf(finding);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const name = PROCESSOR_PROFILES[key]?.name ?? finding.processor ?? key;
+    for (const feature of SERVICE_FEATURES.filter((f) => f.profileKey === key)) {
+      if (featureState(config, feature) !== "open") continue;
+      bullets.push(`- **${name}** (${feature.feature}): ${joinNames(feature.categories.map(lowerLabel))}.`);
+    }
+  }
+  if (bullets.length === 0) return null;
+  return [SERVICE_SECTION.heading, "", SERVICE_SECTION.intro, "", ...bullets].join("\n");
 }
 
 function renderProcessorSection(confidentFindings: Finding[], showLocations: boolean): string | null {
@@ -429,13 +478,18 @@ export function generatePolicyMarkdown(
     ""
   );
 
-  const categorySections = renderCategorySections(confidentFindings, showLocations);
+  const categorySections = renderCategorySections(confidentFindings, showLocations, config);
+  const serviceSection = renderServiceFeatureSection(confidentFindings, config);
   if (categorySections.length > 0) {
     parts.push(categorySections.join("\n\n"));
   } else if (result.unsupportedStackWarning) {
     parts.push("**Not analyzed:** this codebase's primary language/framework isn't supported yet (see the warning above). This is not a clean-scan result — nothing below should be read as \"no data collection found.\"");
-  } else {
+  } else if (serviceSection === null) {
     parts.push("No data-collection patterns were confidently identified in this codebase.");
+  }
+
+  if (serviceSection) {
+    parts.push("", serviceSection);
   }
 
   if (processorSection) {

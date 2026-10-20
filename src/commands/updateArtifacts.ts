@@ -2,7 +2,9 @@ import type { SrcLawyerConfig } from "../config/config.js";
 import { extractPlaceholders, generatePolicyMarkdown } from "../policy/generatePolicy.js";
 import { markerHash, withPolicyMarker } from "../policy/policyGuard.js";
 import { buildSummary, renderReviewFile, type ReviewQuestion } from "../policy/reviewFile.js";
-import { currentAnswerWord, triggeredQuestions, unansweredQuestions } from "../assistant/questions.js";
+import { SERVICE_QUESTION_DEFS, currentAnswerWord, triggeredQuestions, unansweredQuestions } from "../assistant/questions.js";
+import { profileKeyOf } from "../policy/generatePolicy.js";
+import { featureKey, featuresFor } from "../rules/serviceFeatures.js";
 import { lowerLabel } from "../assistant/labels.js";
 import { PROCESSOR_PROFILES } from "../rules/processorProfiles.js";
 import type { DriftEvaluation } from "./driftEvaluation.js";
@@ -52,6 +54,16 @@ export function buildUpdateArtifacts(evaluation: DriftEvaluation, config: SrcLaw
   const questions: ReviewQuestion[] = first
     ? unansweredQuestions(config).filter((def) => def.blocking).map((def) => ({ def, why: def.why, currentAnswer: currentAnswerWord(def, config) }))
     : triggered.map((t) => ({ ...t, currentAnswer: currentAnswerWord(t.def, config) }));
+  // Optional features of the services this review is about (all of them on a first review, the added ones otherwise).
+  const reviewed = new Set(diff.added.processors);
+  const profileKeys = [...new Set(evaluation.findings.map(profileKeyOf).filter((k): k is string => k !== null))];
+  for (const profileKey of profileKeys) {
+    if (!reviewed.has(PROCESSOR_PROFILES[profileKey]?.name ?? "")) continue;
+    for (const feature of featuresFor(profileKey)) {
+      const def = SERVICE_QUESTION_DEFS.find((d) => d.id === `service.${featureKey(feature)}`);
+      if (def && typeof config?.serviceUse?.[featureKey(feature)] !== "boolean") questions.push({ def, why: def.why, currentAnswer: "not answered" });
+    }
+  }
   const reviewBody = renderReviewFile({ coverage: report.coverage ?? "", diff, questions, firstReview: first });
   const blankCount = extractPlaceholders(draftBody).length;
   const marked = withPolicyMarker(reviewBody);

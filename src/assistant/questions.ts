@@ -1,5 +1,7 @@
 import type { SrcLawyerConfig } from "../config/config.js";
 import { POLICY_FILE_QUESTION, POLICY_TEXT_QUESTIONS } from "./wording.js";
+import { joinNames } from "./labels.js";
+import { SERVICE_FEATURES, featureKey } from "../rules/serviceFeatures.js";
 
 // Every `ask`, `why`, `explain` and `ifUnsure` below is the exact wording in docs/question-catalog.md.
 // tests/questionCatalogSync.test.ts fails if a string here is not found verbatim in that file, so
@@ -126,7 +128,37 @@ export function isPolicyTextAnswered(key: PolicyTextKey, config: SrcLawyerConfig
   return typeof value === "string" && value.trim() !== "";
 }
 
-export const QUESTION_BY_ID = new Map([...QUESTION_DEFS, POLICY_FILE_DEF, ...POLICY_TEXT_DEFS].map((q) => [q.id, q]));
+// ---- Features of services (catalog section 10) ----
+// One yes/no question per feature in rules/serviceFeatures.ts. Optional: an unanswered one leaves the item
+// in the policy's "May Be Collected Through Services You Use" section and adds a warning, never a blank.
+
+export const SERVICE_ID_PREFIX = "service.";
+
+export const SERVICE_QUESTION_DEFS: QuestionDef[] = SERVICE_FEATURES.map((f) => ({
+  id: `${SERVICE_ID_PREFIX}${featureKey(f)}`,
+  field: "serviceUse" as const,
+  kind: "yes_no" as const,
+  ask: f.ask,
+  why: f.why,
+  blocking: false,
+  sensitive: false,
+}));
+
+export function isServiceQuestion(def: QuestionDef): boolean {
+  return def.id.startsWith(SERVICE_ID_PREFIX);
+}
+
+/** The `serviceUse` key of a service question id (`service.supabase.auth` gives `supabase.auth`). */
+export function serviceKeyOf(id: string): string | null {
+  return id.startsWith(SERVICE_ID_PREFIX) ? id.slice(SERVICE_ID_PREFIX.length) : null;
+}
+
+export function isServiceAnswered(def: QuestionDef, config: SrcLawyerConfig | null): boolean {
+  const key = serviceKeyOf(def.id);
+  return key !== null && typeof config?.serviceUse?.[key] === "boolean";
+}
+
+export const QUESTION_BY_ID = new Map([...QUESTION_DEFS, POLICY_FILE_DEF, ...POLICY_TEXT_DEFS, ...SERVICE_QUESTION_DEFS].map((q) => [q.id, q]));
 
 /** Whether the owner has given an answer for this question's config field. */
 export function isAnswered(def: QuestionDef, config: SrcLawyerConfig | null): boolean {
@@ -151,6 +183,10 @@ export function unansweredQuestions(config: SrcLawyerConfig | null): QuestionDef
 }
 
 export function currentAnswerWord(def: QuestionDef, config: SrcLawyerConfig | null): string {
+  if (isServiceQuestion(def)) {
+    const v = config?.serviceUse?.[serviceKeyOf(def.id)!];
+    return typeof v === "boolean" ? (v ? "yes" : "no") : "not answered";
+  }
   if (!isAnswered(def, config)) return "not answered";
   if (def.kind === "yes_no") return config?.[def.field] === true ? "yes" : "no";
   return "answered";
@@ -158,11 +194,7 @@ export function currentAnswerWord(def: QuestionDef, config: SrcLawyerConfig | nu
 
 // ---- Questions raised by changes in the code (catalog section 1.2) ----
 
-/** Joins names as "A", "A and B", "A, B and C". */
-export function joinNames(names: string[]): string {
-  if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
+export { joinNames } from "./labels.js";
 
 export const TRIGGER_WHY = {
   ai: (names: string[]) => `Your code now uses ${joinNames(names)}. A privacy policy should say whether user content is shared with AI providers.`,

@@ -21,6 +21,8 @@ export interface LastUpdate {
   result: "no-drift" | "drift" | "inconclusive";
   /** True when this was the first review of a baseline with no approval record. */
   firstReview?: boolean;
+  /** Processor-profile keys of the services found in the code, so `questions` can ask about their optional features without scanning. */
+  serviceProfiles?: string[];
   /** First 8 hex characters of the review file's hash; null when there was no drift. */
   reviewHash: string | null;
   /** Questions this drift raised, with the reason each is asked. */

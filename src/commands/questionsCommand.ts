@@ -1,7 +1,7 @@
 import type { SrcLawyerConfig } from "../config/config.js";
-import { IF_UNSURE_BLOCKING, IF_UNSURE_NON_BLOCKING, POLICY_FILE_CHOICES, isPolicyTextAnswered, policyTextKeyOf, type QuestionDef } from "../assistant/questions.js";
+import { IF_UNSURE_BLOCKING, IF_UNSURE_NON_BLOCKING, POLICY_FILE_CHOICES, isPolicyTextAnswered, isServiceQuestion, policyTextKeyOf, serviceKeyOf, type QuestionDef } from "../assistant/questions.js";
 import { computeProjectState, type OpenQuestion } from "../assistant/state.js";
-import { OPTION_LABELS, POLICY_FILE_OPTION_LABELS, POLICY_TEXT_QUESTIONS } from "../assistant/wording.js";
+import { OPTION_LABELS, POLICY_FILE_OPTION_LABELS, POLICY_TEXT_QUESTIONS, SERVICE_SECTION } from "../assistant/wording.js";
 import { readPackageVersion } from "../version.js";
 
 export interface QuestionsOptions {
@@ -37,6 +37,10 @@ export function currentOf(def: QuestionDef, config: SrcLawyerConfig | null) {
       ? { answered, length: v.length, preview: v.replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, PREVIEW_CHARS), untrusted: true }
       : { answered, length: 0 };
   }
+  if (isServiceQuestion(def)) {
+    const v = config?.serviceUse?.[serviceKeyOf(def.id)!];
+    return typeof v === "boolean" ? { answered: true, value: v } : { answered: false, value: null };
+  }
   if (def.kind === "choice") return { answered: false, value: null };
   const value = config?.[def.field];
   switch (def.kind) {
@@ -54,6 +58,7 @@ export function currentOf(def: QuestionDef, config: SrcLawyerConfig | null) {
 }
 
 function answerWith(def: QuestionDef): string {
+  if (isServiceQuestion(def)) return `srclawyer answer ${def.id} <true|false|unsure>`;
   if (def.kind === "choice") return `srclawyer answer ${def.id} <${POLICY_FILE_CHOICES.join("|")}>`;
   if (def.id === "policyText.additionalSections") return 'srclawyer answer policyText.additionalSections --heading "<heading>" --stdin';
   if (def.id.startsWith("policyText.")) return `srclawyer answer ${def.id} --stdin`;
@@ -75,7 +80,7 @@ export function questionJson(q: OpenQuestion, config: SrcLawyerConfig | null, ev
     why: q.why,
     ...(def.explain ? { explain: def.explain } : {}),
     options: optionsFor(def),
-    ...(def.kind === "choice" || def.id.startsWith("policyText.") ? {} : { ifUnsure: def.blocking ? IF_UNSURE_BLOCKING : IF_UNSURE_NON_BLOCKING }),
+    ...(def.kind === "choice" || def.id.startsWith("policyText.") ? {} : { ifUnsure: isServiceQuestion(def) ? SERVICE_SECTION.ifUnsure : def.blocking ? IF_UNSURE_BLOCKING : IF_UNSURE_NON_BLOCKING }),
     evidence: q.reason === "changed" ? evidence : { addedServices: [], addedDataKinds: [] },
     current: currentOf(def, config),
     answerWith: answerWith(def),

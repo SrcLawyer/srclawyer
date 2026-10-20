@@ -1,13 +1,13 @@
 import { INCOMPLETE_SCAN_BANNER_TITLES } from "../policy/generatePolicy.js";
 import { extractPlaceholders } from "../policy/generatePolicy.js";
-import { PUBLISHABLE, SUMMARY } from "./wording.js";
+import { PUBLISHABLE, SERVICE_SECTION, SUMMARY } from "./wording.js";
 
 export interface Publishability {
   publishable: boolean;
   /** Reasons the policy cannot be marked ready to publish. */
   publishableBlockers: Array<{ code: "no-policy" | "blank" | "scan-incomplete"; count: number; message: string }>;
   /** Things to read before publishing that do not block. */
-  publishableWarnings: Array<{ code: "manual-review"; count: number; message: string }>;
+  publishableWarnings: Array<{ code: "manual-review" | "unconfirmed-service-feature"; count: number; message: string }>;
 }
 
 const REVIEW_SECTIONS = ["## Items Requiring Manual Review", "## Items Declined by AI-Assisted Review"];
@@ -19,6 +19,17 @@ export function countManualReviewItems(markdown: string): number {
   let inSection = false;
   for (const line of lines) {
     if (line.startsWith("## ")) inSection = REVIEW_SECTIONS.includes(line.trim());
+    else if (inSection && line.startsWith("- ")) count += 1;
+  }
+  return count;
+}
+
+/** Bullets under "May Be Collected Through Services You Use": features whose use the owner has not confirmed. */
+export function countUnconfirmedServiceFeatures(markdown: string): number {
+  let count = 0;
+  let inSection = false;
+  for (const line of markdown.split("\n")) {
+    if (line.startsWith("## ")) inSection = line.trim() === SERVICE_SECTION.heading;
     else if (inSection && line.startsWith("- ")) count += 1;
   }
   return count;
@@ -45,6 +56,14 @@ export function assessPublishable(policyText: string | null): Publishability {
   const review = countManualReviewItems(policyText);
   if (review > 0) {
     warnings.push({ code: "manual-review", count: review, message: (review === 1 ? PUBLISHABLE.manualReviewOne : PUBLISHABLE.manualReviewMany).replace("{n}", String(review)) });
+  }
+  const unconfirmed = countUnconfirmedServiceFeatures(policyText);
+  if (unconfirmed > 0) {
+    warnings.push({
+      code: "unconfirmed-service-feature",
+      count: unconfirmed,
+      message: (unconfirmed === 1 ? SERVICE_SECTION.warningOne : SERVICE_SECTION.warningMany).replace("{n}", String(unconfirmed)),
+    });
   }
   return { publishable: blockers.length === 0, publishableBlockers: blockers, publishableWarnings: warnings };
 }

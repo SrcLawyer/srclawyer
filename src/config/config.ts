@@ -54,6 +54,8 @@ export interface SrcLawyerConfig {
   sendsDataToAiServices?: boolean | null;
   policyMode?: PolicyMode;
   policyText?: PolicyTextConfig;
+  /** The owner's answers about features of services they use, keyed `<profile>.<feature>` (docs/question-catalog.md section 10). */
+  serviceUse?: Record<string, boolean>;
 }
 
 export const DEFAULT_CONFIG: SrcLawyerConfig = {

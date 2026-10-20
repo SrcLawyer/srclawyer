@@ -4,7 +4,8 @@ import { loadConfig, policyModeOf, type SrcLawyerConfig } from "../config/config
 import { parseInventory, DEFAULT_INVENTORY_PATH, type Inventory } from "../inventory/inventory.js";
 import { createHash } from "node:crypto";
 import { DEFAULT_POLICY_PATH, classifyPolicyFile } from "../policy/policyGuard.js";
-import { POLICY_FILE_DEF, POLICY_TEXT_DEFS, QUESTION_DEFS, isAnswered, isPolicyTextAnswered, policyTextKeyOf, type QuestionDef } from "./questions.js";
+import { POLICY_FILE_DEF, POLICY_TEXT_DEFS, QUESTION_DEFS, SERVICE_QUESTION_DEFS, isAnswered, isPolicyTextAnswered, isServiceAnswered, policyTextKeyOf, type QuestionDef } from "./questions.js";
+import { featureKey, featuresFor } from "../rules/serviceFeatures.js";
 import { readDeferred, readFreshLastUpdate, readPolicyChoice, type LastUpdate } from "./stateDir.js";
 import { assessPublishable, type Publishability } from "./publishable.js";
 import { STATUS } from "./wording.js";
@@ -76,6 +77,14 @@ export function computeOpenQuestions(config: SrcLawyerConfig | null, last: LastU
     if (!unanswered && !changed) continue;
     const deferred = unanswered && !changed && deferredSet.has(def.id);
     out.push({ def, reason: unanswered ? "unanswered" : "changed", why: triggered.get(def.id) ?? def.why, blocking: (def.blocking || changed) && !deferred, deferred });
+  }
+  // Optional features of the services found in the code (never blocking; an unanswered one is a warning on the policy).
+  for (const profileKey of last?.serviceProfiles ?? []) {
+    for (const feature of featuresFor(profileKey)) {
+      const def = SERVICE_QUESTION_DEFS.find((d) => d.id === `service.${featureKey(feature)}`);
+      if (!def || isServiceAnswered(def, config)) continue;
+      out.push({ def, reason: "unanswered", why: def.why, blocking: false, deferred: deferredSet.has(def.id) });
+    }
   }
   return out;
 }

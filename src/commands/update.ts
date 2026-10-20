@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { loadConfig, policyModeOf } from "../config/config.js";
 import { checkPolicyWrite, DEFAULT_POLICY_PATH, wouldDiscardOwnerWork, writeMarkedFile, writeMarkedFileOverwriting, type MarkedWrite } from "../policy/policyGuard.js";
-import { generatePolicyMarkdown } from "../policy/generatePolicy.js";
+import { generatePolicyMarkdown, profileKeyOf } from "../policy/generatePolicy.js";
 import { BACKUP_NOTE, COMMAND } from "../assistant/wording.js";
 import { backupFile, readFreshLastUpdate, readPolicyChoice, sha256, writeLastUpdate, type LastUpdate } from "../assistant/stateDir.js";
 import { computeProjectState, readBaseline, type NextAction, type ProjectStateName } from "../assistant/state.js";
@@ -69,6 +69,7 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
   const config = loadConfig(root);
   const baselineText = readBaseline(root, options.inventoryPath).text;
   const generatedMode = policyModeOf(config) === "generated";
+  const serviceProfiles = report.result === "inconclusive" ? [] : [...new Set(evaluation.findings.map(profileKeyOf).filter((k): k is string => k !== null))].sort();
   let exitCode = report.exitCode;
 
   const firstReview = report.result === "no-drift" && report.baseline !== null && !report.baseline.approved;
@@ -96,16 +97,17 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
     // Re-running update after the owner answered must not forget those answers: carry over the ones that
     // still belong to this drift (same baseline, same questions).
     const previous = readFreshLastUpdate(root, baselineText);
-    const triggeredIds = firstReview ? [] : artifacts.questions.map((q) => q.def.id);
+    const triggeredIds = firstReview ? [] : artifacts.questions.filter((q) => q.def.field !== "serviceUse").map((q) => q.def.id);
     const record: LastUpdate = {
       schema: 1,
       srclawyerVersion: report.srclawyerVersion,
       baselineSha256: sha256(baselineText ?? ""),
       result: report.result === "drift" ? "drift" : "no-drift",
       firstReview,
+      serviceProfiles,
       reviewHash: artifacts.reviewHash,
       // On a first review nothing changed, so nothing is re-confirmed; the open questions are just the blank ones.
-      triggered: firstReview ? [] : artifacts.questions.map((q) => ({ id: q.def.id, why: q.why })),
+      triggered: firstReview ? [] : artifacts.questions.filter((q) => q.def.field !== "serviceUse").map((q) => ({ id: q.def.id, why: q.why })),
       answered: (previous?.answered ?? []).filter((id) => triggeredIds.includes(id)),
       diff: {
         addedCategories: diff.added.categories.map(categoryLabel),
@@ -123,6 +125,7 @@ export async function runUpdate(root: string, options: UpdateOptions): Promise<n
       srclawyerVersion: report.srclawyerVersion,
       baselineSha256: sha256(baselineText),
       result: report.result,
+      serviceProfiles,
       reviewHash: null,
       triggered: [],
       answered: [],

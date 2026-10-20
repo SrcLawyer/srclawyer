@@ -143,3 +143,15 @@ export const FIRST_REVIEW = {
   handles: "Your code appears to handle {label in lower case}.",
   handlesChildren: "Your code appears to handle information that may relate to children.",
 } as const;
+
+// ---- Services you use (catalog section 10; the heading and intro are FOR ATTORNEY REVIEW) ----
+export const SERVICE_SECTION = {
+  heading: "## May Be Collected Through Services You Use",
+  intro:
+    "Some of the third-party services used by this product can collect the following, depending on how they are set up. This list describes what each service documents; it does not say that this product collects the data.",
+  ifUnsure: "No problem. It stays listed as something that may be collected, and you'll see a reminder before you publish.",
+  warningOne:
+    '1 feature of a service you use is listed under "May Be Collected Through Services You Use" in your policy. Please confirm whether you use it before you publish.',
+  warningMany:
+    '{n} features of services you use are listed under "May Be Collected Through Services You Use" in your policy. Please confirm whether you use them before you publish.',
+} as const;

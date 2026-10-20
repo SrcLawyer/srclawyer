@@ -308,7 +308,7 @@ export const VENDORS: VendorEntry[] = [
       "User IDs as a category: no matching category exists.",
     ],
     sources: [
-      { about: "npm:@intercom/messenger-js-sdk", quote: "import Intercom from \"@intercom/messenger-js-sdk\";", url: "https://developers.intercom.com/installing-intercom/web/installation" },
+      { about: "npm:@intercom/messenger-js-sdk", quote: "import Intercom from \"@intercom/messenger-js-sdk\";", url: "https://developers.intercom.com/installing-intercom/web/installation.md" },
       { about: "npm:intercom-client", quote: "npm i -s intercom-client", url: "https://github.com/intercom/intercom-node" },
       { about: "host:widget.intercom.io", quote: "https://widget.intercom.io/widget/", url: "https://developers.intercom.com/installing-intercom/web/installation" },
       { about: "script:widget.intercom.io", quote: "https://widget.intercom.io/widget/", url: "https://developers.intercom.com/installing-intercom/web/installation" },

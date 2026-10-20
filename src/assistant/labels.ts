@@ -21,3 +21,9 @@ export function lowerLabel(category: string): string {
   const label = categoryLabel(category);
   return /^[A-Z]{2}/.test(label) ? label : label.charAt(0).toLowerCase() + label.slice(1);
 }
+
+/** Joins names as "A", "A and B", "A, B and C". */
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { parseDocument } from "yaml";
 import { configPath, loadConfig, POLICY_TEXT_LIMITS } from "../config/config.js";
 import { DEFAULT_POLICY_PATH } from "../policy/policyGuard.js";
-import { POLICY_FILE_CHOICES, POLICY_FILE_EDITED_ID, QUESTION_BY_ID, policyTextKeyOf, type PolicyFileChoice, type PolicyTextKey, type QuestionDef } from "../assistant/questions.js";
+import { POLICY_FILE_CHOICES, POLICY_FILE_EDITED_ID, QUESTION_BY_ID, isServiceQuestion, policyTextKeyOf, serviceKeyOf, type PolicyFileChoice, type PolicyTextKey, type QuestionDef } from "../assistant/questions.js";
 import { computeProjectState, readBaseline } from "../assistant/state.js";
 import { backupFile, markAnswered, readDeferred, readFreshLastUpdate, writeDeferred, writePolicyChoice } from "../assistant/stateDir.js";
 import { BACKUP_NOTE, STATUS } from "../assistant/wording.js";
@@ -187,6 +187,18 @@ function answerPolicyText(root: string, options: AnswerOptions, def: QuestionDef
   return reportFor(root, options, def, { recorded: true, written: true });
 }
 
+/** `service.<profile>.<feature>`: whether the owner uses an optional feature of a service they use. */
+function answerServiceFeature(root: string, options: AnswerOptions, def: QuestionDef) {
+  const parsed = parseAnswer(def, options.value);
+  if (parsed.kind === "unsure") {
+    writeDeferred(root, [...readDeferred(root), def.id]);
+    return reportFor(root, options, def, { recorded: false, written: false });
+  }
+  writeConfigValue(root, ["serviceUse", serviceKeyOf(def.id)!], parsed.value, undefined);
+  writeDeferred(root, readDeferred(root).filter((id) => id !== def.id));
+  return reportFor(root, options, def, { recorded: true, written: true });
+}
+
 export function answerReport(root: string, options: AnswerOptions) {
   const def = QUESTION_BY_ID.get(options.id);
   if (!def) throw new AnswerError("unknown-question", "That isn't one of the questions SrcLawyer asks.");
@@ -194,6 +206,7 @@ export function answerReport(root: string, options: AnswerOptions) {
   if (def.id === POLICY_FILE_EDITED_ID) return answerPolicyFile(root, options, def);
   const textKey = policyTextKeyOf(def.id);
   if (textKey) return answerPolicyText(root, options, def, textKey);
+  if (isServiceQuestion(def)) return answerServiceFeature(root, options, def);
 
   const parsed = parseAnswer(def, options.value);
   const note = validateNote(options.note, def.sensitive && parsed.kind === "value");
