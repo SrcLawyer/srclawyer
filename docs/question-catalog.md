@@ -1,6 +1,6 @@
 # Question catalog and new generated wording (0.9.0 and 0.10.0)
 
-**Status: DRAFT (revision 2) for owner and attorney review.** Like [`legal-wording-review.md`](legal-wording-review.md), this is starting-point wording, not attorney-approved language. Revision 2 applies the owner's review of revision 1. **Every changed or new item is marked [CHANGED r2] or [NEW r2]**; the full list is in the change log. Once approved, the wording here is frozen: the code reads these exact strings, and a test fails if any sentence in the code differs from this file.
+**Status: DRAFT (revision 3) for owner and attorney review.** Like [`legal-wording-review.md`](legal-wording-review.md), this is starting-point wording, not attorney-approved language. Revision 2 applied the owner's review of revision 1. **Revision 3 adds the 0.10.0 Action text (sections 7, 11 and 12, Appendix D), marked [CHANGED r3] or [NEW r3].** Every changed or new item is marked [CHANGED r2], [NEW r2], [CHANGED r3] or [NEW r3]; the full list is in the change log. Once approved, the wording here is frozen: the code reads these exact strings, and a test fails if any sentence in the code differs from this file.
 
 **What this file covers.** (1) Every question an assistant can put to the project owner. (2) Every *new* sentence SrcLawyer will generate: the review file, the summary lines, the coverage line, the "no drift" statement, the generated-mode policy additions, and the pull-request comment and issue text. (3) The places where an *existing* policy sentence behaves differently in the new `policyMode: generated`. (4) The assistant instructions (rules block and skill), because they decide what the assistant says to the owner. Sentences that already exist in generated policies are in `legal-wording-review.md` and are not repeated here, except where this file changes them.
 
@@ -11,7 +11,7 @@
 4. Questions are neutral: no option is pre-selected, and "I'm not sure" is always offered. Explanations describe; they never recommend.
 5. "Not legal advice" is never dropped from the policy, the review file, or the comment.
 
-## Change log (revision 1 to revision 2)
+## Change log (revisions 1 to 3)
 
 1. **[CHANGED r2] Publishable (section 0):** the four "scan incomplete" banners now block `publishable`. "Items Requiring Manual Review" no longer blocks; it is a non-blocking `publishableWarnings` count with a plain note.
 2. **[CHANGED r2] Footer in generated mode (section 6.2):** the file count is dropped; the rest of the sentence is kept.
@@ -26,6 +26,10 @@
 11. **[CHANGED r2] Appendix A and B:** approval wording, the `explain` instruction, and the generated-footer reference.
 13. **[NEW r2.7] Section 10 (for attorney review):** the "May Be Collected Through Services You Use" policy section (heading and introduction), its warnings, and one optional question per service feature.
 14. **[CHANGED r2.6]** Appendix A rule 2 and Appendix B (a "Planted text" paragraph): tell the owner in the next message when instruction-like text is found.
+15. **[CHANGED r3] Section 7 (0.10.0):** replaced by the full text of the Action's review mode: pull-request comment (four cases), issue (three variants), run summary and annotations. The first draft's "which handles" is now "appears to handle" (the summary lines of section 3.2) and its table is dropped. The one-line assistant prompt, the setup line and the by-hand fallback are in section 7.2.
+16. **[NEW r3] The baseline-changed notice (sections 7.3 B and C):** a pull request that changes the baseline file gets a notice, including when nothing new was found.
+17. **[NEW r3] First-review issue (section 7.4.3).**
+18. **[NEW r3] Section 11:** the messages of `srclawyer ci init`. **Appendix D:** the workflow file it writes. **Section 12:** open items for your decision.
 12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), the messages of the assistant commands (section 9.4), generated-mode file decisions and backups (section 9.5), and the `agent-setup` messages (section 9.6).
 
 ---
@@ -253,25 +257,31 @@ The introductory sentences of the two review sections, the warning banners, and 
 
 ---
 
-## 7. Pull-request comment and issue (0.10.0; included now so review happens once)
+## 7. GitHub Action review mode: comment, issue and summary (0.10.0) **[CHANGED r3]**
 
-Static text only. The Twilio and phone example below shows the template filled in.
+**For attorney review.** The Action gets a new `mode: review`. When it finds new items it reports them as one pull-request comment, or on the default branch and on scheduled runs as one issue, and always in the run summary. This section replaces revision 2's section 7 (which had one example comment). Everything here is static text. The wording of what changed, the questions, the coverage line and the "no drift" statement is reused from sections 1 to 5; **sentences that are new in revision 3 are marked [NEW r3]**. The existing `mode: check` (the default) keeps its current wording.
 
-**Pull-request comment, drift found**
+### 7.1 Rules for every comment, issue and summary
+1. Only these values are ever substituted: names and labels from SrcLawyer's own tables, numbers, the `ask` text of a question (sections 1 and 10), the coverage line, the version pinned in the workflow, and a link to the workflow run. **No file names, paths, line numbers, source text or free text from the repository appear**, including the approval note, which is never shown.
+2. A name that is not in SrcLawyer's own tables (it can only come from the baseline file) is shown as `a service this version of SrcLawyer doesn't recognize` or `a kind of data this version of SrcLawyer doesn't recognize`. **[NEW r3]**
+3. Every comment, issue and summary ends with the coverage line (section 4) and `_This is automated analysis, not legal advice._`. The ones that say nothing new was found carry the section 5 statement.
+4. `{version}` is the version pinned in the workflow, for example `0.10.0`. If the workflow is pinned to a commit (used only for testing), the commands read `npx github:SrcLawyer/srclawyer#{commit}` instead of `npx srclawyer@{version}`.
+5. The comment and the issue do not contain the "blank in your policy" line of section 3.2: each blank corresponds to a question, which the comment lists. Nothing here says the policy is, or isn't, compliant.
+
+### 7.2 Building blocks
+**Changes block** (one bullet per item: added services, added kinds of data, removed services, removed kinds of data). The sentences are the summary lines of section 3.2; the bold marks are formatting only.
+- `Your code now uses **{Name}**.`
+- `Your code now appears to handle **{label in lower case}**.`
+- `Your code now appears to handle information that may relate to children.` (instead of the line above, for children's data)
+- `Your code no longer uses **{Name}**.`
+- `The scanner no longer finds **{label in lower case}**.`
+
+Followed by: `This differs from your last approved review.` **[NEW r3]**
+
+**Questions block** (only when there are open questions): the sentence from section 3.2, `{n} question needs your answer.` or `{n} questions need your answers.`, then one bullet per question with its `ask` text.
+
+**Assistant block, with questions** **[NEW r3]** (the heading and the quoted prompt are the owner's wording from the plan, with "confirm" as decided in revision 2)
 ```markdown
-<!-- srclawyer-drift-check -->
-## SrcLawyer: your privacy policy needs a quick look
-
-Your code now uses **Twilio**, which handles **phone numbers**. Your last approved review doesn't include that.
-
-| | Added | Removed |
-|---|---|---|
-| Data | Phone numbers | none |
-| Services | Twilio | none |
-
-**Open questions ({n}):**
-- {ask, one bullet each}
-
 ### Fix it with your AI coding assistant
 Open this project in Claude Code, Cursor, or another coding assistant and say:
 
@@ -288,18 +298,204 @@ Tell it: "Set up SrcLawyer in this project: run `npx srclawyer@{version} agent-s
 
 Answer the questions in `.srclawyer.config.yml`, run `npx srclawyer@{version} update`, read `PRIVACY_POLICY.review.md`, then run `npx srclawyer@{version} scan --write-inventory` and commit `.srclawyer.inventory.json`.
 </details>
+```
+**Assistant block, without questions:** identical, except the sentence under the quoted prompt reads: `It will update your privacy policy and ask you to confirm before recording it as reviewed. Nothing is published automatically.`
 
+**Footer block**
+```markdown
 Coverage: {coverage line}
 
 _This is automated analysis, not legal advice._
 ```
-**Added when the pull request itself changes `.srclawyer.inventory.json`:** `**This pull request changes the approved review state.** Reviewer: please confirm that the added and removed items above are intended.`
 
-**Pull-request comment, no drift** (only if a drift comment already exists, which it then replaces): `<!-- srclawyer-drift-check -->` then `## SrcLawyer: no new items found` then the section 5 statement and the coverage line.
+### 7.3 Pull-request comment (one comment per pull request, kept up to date)
 
-**Issue** (default branch and scheduled runs): title **`Privacy policy review needed`**; the body is the comment above with the first heading `## SrcLawyer: your privacy policy needs a quick look`, plus `Found by this run: {run link}`. When a later run finds no drift: `## SrcLawyer: no new items found` + the section 5 statement + `You can close this issue once you have looked at it.`
+The comment is identified by the hidden line `<!-- srclawyer-drift-check -->` (first line; invisible when rendered). It is created when there is something to say, rewritten on every later run to match the current case, and never deleted. There are four cases.
 
-**Run summary when the scan could not finish** (no comment, no issue): `SrcLawyer couldn't finish checking, so there is no result this time. This is not a finding that anything changed. Reasons:` followed by one bullet per reason.
+**A. New or removed items, and this pull request does not change the baseline file**
+```markdown
+<!-- srclawyer-drift-check -->
+## SrcLawyer: your privacy policy needs a quick look
+
+{changes block}
+
+{questions block}
+
+{assistant block}
+
+{footer block}
+```
+
+**B. New or removed items, and this pull request also changes the baseline file** **[NEW r3]**: case A, with this paragraph added directly under "This differs from your last approved review.":
+
+`**This pull request changes the approved review state.** Reviewer: please confirm that the changes listed above are intended.`
+
+**C. Nothing new, but this pull request changes the baseline file** **[NEW r3]**. This case matters because a pull request that records the changes as reviewed leaves the scanner with nothing new to report; without this comment the approval would pass unseen.
+```markdown
+<!-- srclawyer-drift-check -->
+## SrcLawyer: this pull request changes the approved review state
+
+**This pull request changes the approved review state.** Reviewer: please confirm that the changes below are intended.
+
+{one line for each of the following that is not empty}
+- Services now recorded as reviewed: {names}.
+- Kinds of personal data now recorded as reviewed: {labels in lower case}.
+- Services no longer recorded: {names}.
+- Kinds of personal data no longer recorded: {labels in lower case}.
+
+{or, if all four are empty:} The services and kinds of personal data in the approved review state are unchanged.
+
+No new items found by the scanner since your last approved review. This is not a statement that your product or your policy is compliant.
+
+{footer block}
+```
+Names lists use the rule of section 9.2.
+
+**D. Nothing new, the baseline file is not changed, and an earlier comment exists:** the comment is rewritten to
+```markdown
+<!-- srclawyer-drift-check -->
+## SrcLawyer: no new items found
+
+No new items found by the scanner since your last approved review. This is not a statement that your product or your policy is compliant.
+
+{footer block}
+```
+**No comment is posted** when nothing is new, the baseline file is unchanged and there is no earlier comment; when the scan could not finish (the run summary says so, section 7.5); when the pull request comes from a fork (the token is read-only; the run summary carries the content); when the branch the pull request targets has no baseline file yet (there is no earlier review state to change); and on a first review (section 9.7), which is reported only through the issue (section 7.4.3).
+
+### 7.4 Issue (default branch pushes, scheduled runs and manual runs on the default branch)
+
+Title, always: **`Privacy policy review needed`**. The body starts with the hidden lines `<!-- srclawyer-drift-check -->` and `<!-- srclawyer-fingerprint:{hash} -->` (the hash identifies this set of added and removed items, so a closed issue is not reopened for the same items; neither line is visible when rendered). The issue is created when there is something to say, updated by later runs, and **never closed by SrcLawyer**.
+
+**7.4.1 New or removed items**
+```markdown
+<!-- srclawyer-drift-check -->
+<!-- srclawyer-fingerprint:{hash} -->
+## SrcLawyer: your privacy policy needs a quick look
+
+{changes block}
+
+{questions block}
+
+{assistant block}
+
+Found by this run: {run link}
+
+{footer block}
+```
+**7.4.2 Later run finds nothing new** (the open issue is updated; it is not closed)
+```markdown
+<!-- srclawyer-drift-check -->
+## SrcLawyer: no new items found
+
+No new items found by the scanner since your last approved review. This is not a statement that your product or your policy is compliant.
+
+You can close this issue once you have looked at it.
+
+Found by this run: {run link}
+
+{footer block}
+```
+**7.4.3 First review (nothing has been approved yet)** **[NEW r3]** *(open for your decision, section 12.1)*. Created once when the workflow runs on a project whose baseline has no approval record (a baseline written by `init`, `scan --write-inventory` or `ci init` has none). The found-lines are the first-review lines of section 9.7.
+```markdown
+<!-- srclawyer-drift-check -->
+<!-- srclawyer-fingerprint:{hash} -->
+## SrcLawyer: your first privacy review is waiting
+
+This is the first review of this project. Nothing has been approved yet.
+
+{one line per service: Your code uses **{Name}**.}
+{one line per kind of data: Your code appears to handle **{label in lower case}**.}
+{or, if there is nothing: The scanner found no personal data or third-party services in your code.}
+
+{questions block}
+
+{assistant block}
+
+Found by this run: {run link}
+
+{footer block}
+```
+Once the owner records the first approval, the next run finds nothing new and the issue is updated as in 7.4.2.
+
+### 7.5 Run summary (shown on the workflow run's page; the only place a fork's pull request gets the result)
+In `mode: review` the summary is the same text as the comment (cases A, B and C), the issue (7.4.1 and 7.4.3) or the "no new items" text (case D), without the hidden lines, followed by these two sentences when files were uploaded **[NEW r3]**:
+
+`The policy draft and the review file are attached to this run as the artifact "srclawyer-review". They are kept for 7 days.`
+
+On a pull request from a fork, one more sentence is added at the top **[NEW r3]**: `This pull request comes from a fork, so no comment was posted and the result is shown here instead.`
+
+**When the scan could not finish** (no comment, no issue, no files):
+```markdown
+## SrcLawyer: couldn't finish checking
+
+SrcLawyer couldn't finish checking, so there is no result this time. This is not a finding that anything changed. Reasons:
+
+- {one bullet per reason}
+
+{footer block}
+```
+(The reasons are the existing inconclusive messages, which are SrcLawyer's own sentences.) **An error** (for example a missing baseline) keeps its existing summary: `## SrcLawyer drift check: error` and the message.
+
+### 7.6 Annotations and notices (shown beside the run; operational) **[NEW r3]**
+- When items are found and `fail-on-drift` is `false` (as in the generated workflow), a warning: `Your privacy policy needs a quick look. The details are in the run summary.` With `fail-on-drift: "true"` the same sentence is an error and fails the step.
+- On a first review, a warning: `Your first privacy review is waiting. The details are in the run summary.`
+- `No comment was posted because this pull request comes from a fork. The result is in the run summary.`
+- `Couldn't post the comment. Check that the job has pull-requests: write. The check result is not affected.`
+- `Couldn't create or update the issue. Check that Issues are turned on for this repository and that the job has issues: write. The check result is not affected.`
+- `No issue was created because an issue for these same items was already closed.`
+- `This run is not on the default branch, so only the run summary was written.`
+
+### 7.7 Worked examples
+**Case A**, one new service and one open question:
+```markdown
+<!-- srclawyer-drift-check -->
+## SrcLawyer: your privacy policy needs a quick look
+
+- Your code now uses **Twilio**.
+- Your code now appears to handle **phone numbers**.
+
+This differs from your last approved review.
+
+1 question needs your answer.
+- Do you have users in the European Union or the United Kingdom?
+
+### Fix it with your AI coding assistant
+Open this project in Claude Code, Cursor, or another coding assistant and say:
+
+> Resolve the SrcLawyer privacy review in this project. Ask me any questions in plain English, and don't approve anything until I say yes.
+
+It will ask you the questions above, update your privacy policy, and ask you to confirm before recording it as reviewed. Nothing is published automatically.
+
+<details><summary>Assistant not set up yet?</summary>
+
+Tell it: "Set up SrcLawyer in this project: run `npx srclawyer@0.10.0 agent-setup` and show me what it will change first."
+</details>
+
+<details><summary>No assistant? Do it by hand</summary>
+
+Answer the questions in `.srclawyer.config.yml`, run `npx srclawyer@0.10.0 update`, read `PRIVACY_POLICY.review.md`, then run `npx srclawyer@0.10.0 scan --write-inventory` and commit `.srclawyer.inventory.json`.
+</details>
+
+Coverage: scanned 212 files (git discovery) for personal data read from requests in JavaScript/TypeScript (Express, Next.js) and Python (Flask), and for 18 known third-party services. Not covered: other languages and frameworks, calls to third-party services made with plain HTTP, scripts your pages load at runtime, and data handled outside this repository.
+
+_This is automated analysis, not legal advice._
+```
+**Case C**, a pull request that records Twilio and phone numbers as reviewed:
+```markdown
+<!-- srclawyer-drift-check -->
+## SrcLawyer: this pull request changes the approved review state
+
+**This pull request changes the approved review state.** Reviewer: please confirm that the changes below are intended.
+
+- Services now recorded as reviewed: Twilio.
+- Kinds of personal data now recorded as reviewed: phone numbers.
+
+No new items found by the scanner since your last approved review. This is not a statement that your product or your policy is compliant.
+
+Coverage: (as above)
+
+_This is automated analysis, not legal advice._
+```
 
 ---
 
@@ -428,6 +624,54 @@ See [vendor-sources.md](vendor-sources.md) for the table with both quotes per ro
 
 ---
 
+## 11. `srclawyer ci init`: messages **[NEW r3]**
+
+`srclawyer ci init` writes one GitHub workflow file (Appendix D) and, if the project has none, a baseline. These are the sentences it prints. It writes nothing until the owner says yes, never overwrites a file, never commits or pushes, and never changes a GitHub setting.
+
+### 11.1 The question
+Shown after the existing network notice that `scan` shows (unchanged), because creating the baseline runs a scan:
+```
+SrcLawyer will set up a GitHub workflow in this project:
+  - create .github/workflows/srclawyer.yml
+  - create .srclawyer.inventory.json from a scan of your code
+Your privacy policy will not be changed, and nothing will be committed or pushed.
+The workflow reports what it finds as pull request comments and issues. It never changes your code or your policy, merges, or publishes anything.
+Create these files? [y/N] 
+```
+If a baseline already exists, the second bullet reads `  - keep your existing .srclawyer.inventory.json`. With `--yes` the question is skipped.
+
+### 11.2 After the files are written
+```
+Created .github/workflows/srclawyer.yml.
+Created .srclawyer.inventory.json.
+Nothing has been committed or pushed. To turn the workflow on, commit and push both files:
+  git add .github/workflows/srclawyer.yml .srclawyer.inventory.json
+  git commit -m "Add SrcLawyer privacy review"
+  git push
+The workflow runs on pull requests, on pushes to {branch}, and once a week. Scheduled runs and issues start only after the workflow is on {branch}, and the repository needs Issues turned on.
+To stop it, delete .github/workflows/srclawyer.yml.
+Nothing has been approved yet. When you are ready, ask your AI coding assistant: "Resolve the SrcLawyer privacy review in this project."
+```
+When the baseline already existed, the second line is `Kept your existing .srclawyer.inventory.json.`. The last line is printed only when that baseline has no approval record. `{branch}` is the repository's default branch, or `main` if it cannot be found.
+
+### 11.3 Refusals (exit code 2; nothing is written)
+- Not in a git repository: `This folder isn't inside a git repository, so a GitHub workflow can't be set up here. Nothing was written.`
+- The file exists: `.github/workflows/srclawyer.yml already exists, so it was left alone. Nothing was written.`
+- No terminal and no `--yes`: `Nothing was written. Run again with --yes to create these files.`
+- The owner answered no: `Nothing was written.`
+- The baseline could not be written (the scan's own message is printed first, as for `scan --write-inventory`): `The baseline could not be written, so no workflow was created.`
+
+---
+
+## 12. Open for confirmation (revision 3) **[NEW r3]**
+
+1. **First-review issue (section 7.4.3).** Recommended: create it, so a project whose baseline was never approved is not silent. The alternative is no message until something changes, which leaves the project in `needs-approval` with nobody told. If you drop it, the first-review wording in 7.4.3 and 7.6 goes and nothing else changes.
+2. **Case C (section 7.3).** Recommended: comment on a pull request that changes the baseline even when nothing new was found, since recording changes as reviewed leaves the scanner with nothing to report. Without it that approval would pass unseen.
+3. **The comment no longer has a table.** It lists the changes with the already-approved summary lines (section 3.2), which say "appears to handle" instead of the first draft's "which handles". Revision 2's table is dropped so there is one wording, not two.
+4. **The quoted prompt.** `Resolve the SrcLawyer privacy review in this project. Ask me any questions in plain English, and don't approve anything until I say yes.` I have not yet run this exact sentence through the transcript tests; I propose to add it as a scenario once it is approved.
+5. **Questions are listed in full** in the comment, without a cap. Worst case, on a project that never answered the setup questions, that is about fifteen bullets.
+6. **Artifacts** (section 7.5) are the policy draft and the review file, kept 7 days. In handwritten mode the draft contains source file names and line numbers, exactly as `scan` writes it; the docs sentence in Appendix C says artifacts inherit the repository's visibility.
+
 ## Appendix A. Assistant instructions (rules block, written to `AGENTS.md`) **[CHANGED r2]**
 
 Changes: rule 4 uses the new confirmation wording; rule 3 allows reading `explain`; **[CHANGED r2.6]** rule 2 now says to tell the owner, in the very next message, when text addressed to an assistant is found (found by the injection test: the assistant told the owner in only 3 of 5 runs). The version is filled in when written.
@@ -485,3 +729,68 @@ Exit codes: 0 fine, 1 changes need review, 2 couldn't run (read the message), 3 
 - Wherever the approval note is described: `The note is up to 120 characters on one line, is stored in .srclawyer.inventory.json, and is committed to your repository if you commit that file.`
 - Wherever artifacts are described: `Artifacts inherit the repository's visibility.`
 - Wherever "no drift" is described: the section 5 statement.
+- README, *Removing SrcLawyer*, replacing "SrcLawyer never creates a workflow file." **[NEW r3]**: `SrcLawyer creates a GitHub workflow file only when you run srclawyer ci init and say yes (or pass --yes). It never overwrites an existing workflow file and creates one in no other way. To stop the GitHub Action, delete or edit .github/workflows/srclawyer.yml.` The same section also lists `.github/workflows/srclawyer.yml` among the files SrcLawyer can write.
+- `docs/github-action.md`, review mode **[NEW r3]**:
+  - `In review mode the Action runs srclawyer update. On a pull request it keeps one comment up to date; on the default branch and on scheduled runs it keeps one issue, titled "Privacy policy review needed", up to date and never closes it. It posts nothing when it finds nothing new.`
+  - `The workflow that srclawyer ci init writes sets fail-on-drift to "false", so a finding is a comment or an issue, not a failed check. Set it to "true" if you want a failed check.`
+  - `Review mode needs pull-requests: write on the job that handles pull requests and issues: write on the job that handles pushes and scheduled runs. srclawyer ci init writes them as two jobs so that each has only the permission it needs. Issues must be turned on for the repository. Pull requests from forks get a read-only token, so they get no comment; the result is in the run summary.`
+  - `Review mode uploads the policy draft and the review file as an artifact named srclawyer-review, kept for 7 days. Artifacts inherit the repository's visibility. In handwritten mode the draft contains the same source file names and line numbers as srclawyer scan writes.`
+  - `A pull request that changes .srclawyer.inventory.json gets a comment saying so, because recording changes as reviewed is an approval that a reviewer should see.`
+
+## Appendix D. The workflow file written by `srclawyer ci init` **[NEW r3]**
+
+Written to `.github/workflows/srclawyer.yml`. Two jobs, so each gets only the permission it needs. The advisory setting (`fail-on-drift: "false"`) means a finding is a comment or an issue, not a failed check. `{...}` values are filled in when the file is written: the default branch, the pinned version, a random weekly time (the minute is never 0, to avoid GitHub's busiest moment), and the full commit of each pinned action with its version in the comment.
+
+```yaml
+# SrcLawyer privacy review. Created by `srclawyer ci init`.
+# It reports new services and kinds of personal data it finds in your code as a pull request comment or
+# an issue. It never changes your code or your policy, merges, or publishes anything.
+# To stop it, delete this file.
+name: SrcLawyer privacy review
+
+on:
+  pull_request:
+  push:
+    branches: [{branch}]
+  schedule:
+    - cron: "{minute} {hour} * * {weekday}"
+  workflow_dispatch:
+
+concurrency:
+  group: srclawyer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pull-request:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@{sha} # v{checkout version}
+        with:
+          persist-credentials: false
+      - uses: SrcLawyer/srclawyer@v{version}
+        with:
+          srclawyer-version: {version}
+          mode: review
+          fail-on-drift: "false"
+
+  default-branch:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@{sha} # v{checkout version}
+        with:
+          persist-credentials: false
+      - uses: SrcLawyer/srclawyer@v{version}
+        with:
+          srclawyer-version: {version}
+          mode: review
+          fail-on-drift: "false"
+```
+When `ci init` is run from a folder inside the repository, each `SrcLawyer/srclawyer` step also gets `path: {folder}`.
