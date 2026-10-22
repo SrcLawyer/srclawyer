@@ -28,7 +28,7 @@
 14. **[CHANGED r2.6]** Appendix A rule 2 and Appendix B (a "Planted text" paragraph): tell the owner in the next message when instruction-like text is found.
 15. **[CHANGED r3] Section 7 (0.10.0):** replaced by the full text of the Action's review mode: pull-request comment (four cases), issue (three variants), run summary and annotations. The first draft's "which handles" is now "appears to handle" (the summary lines of section 3.2) and its table is dropped. The one-line assistant prompt, the setup line and the by-hand fallback are in section 7.2.
 16. **[NEW r3] The baseline-changed notice (sections 7.3 B and C):** a pull request that changes the baseline file gets a notice, including when nothing new was found.
-17. **[NEW r3] First-review issue (section 7.4.3).**
+17. **[NEW r3] First-review issue (section 7.4.3).** **[CHANGED r3]** The questions block lists sensitive questions first, shows five and collapses the rest (section 7.2).
 18. **[NEW r3] Section 11:** the messages of `srclawyer ci init`. **Appendix D:** the workflow file it writes. **Section 12:** open items for your decision.
 12. **[NEW r2.1] Section 9:** command messages for `update`, derived grammatical variants, one wording concern found while implementing (section 9.3), the messages of the assistant commands (section 9.4), generated-mode file decisions and backups (section 9.5), and the `agent-setup` messages (section 9.6).
 
@@ -278,7 +278,22 @@ The introductory sentences of the two review sections, the warning banners, and 
 
 Followed by: `This differs from your last approved review.` **[NEW r3]**
 
-**Questions block** (only when there are open questions): the sentence from section 3.2, `{n} question needs your answer.` or `{n} questions need your answers.`, then one bullet per question with its `ask` text.
+**Questions block** (only when there are open questions) **[CHANGED r3]**: the sentence from section 3.2, `{n} question needs your answer.` or `{n} questions need your answers.` (`{n}` counts all of them), then the `ask` text of each question as a bullet. **Sensitive questions come first** (the six in section 1.5), then the others in the order of section 1. **The first five are shown; any others go in a collapsed block** whose summary reads `{k} more question` or `{k} more questions` **[NEW r3]**:
+```markdown
+{n} questions need your answers.
+- {ask 1}
+- {ask 2}
+- {ask 3}
+- {ask 4}
+- {ask 5}
+
+<details><summary>{k} more questions</summary>
+
+- {ask 6}
+- {ask 7}
+</details>
+```
+With five or fewer, there is no collapsed block.
 
 **Assistant block, with questions** **[NEW r3]** (the heading and the quoted prompt are the owner's wording from the plan, with "confirm" as decided in revision 2)
 ```markdown
@@ -395,7 +410,7 @@ Found by this run: {run link}
 
 {footer block}
 ```
-**7.4.3 First review (nothing has been approved yet)** **[NEW r3]** *(open for your decision, section 12.1)*. Created once when the workflow runs on a project whose baseline has no approval record (a baseline written by `init`, `scan --write-inventory` or `ci init` has none). The found-lines are the first-review lines of section 9.7.
+**7.4.3 First review (nothing has been approved yet)** **[NEW r3]** *(decided: kept, section 12)*. Created once, never closed by SrcLawyer, and carrying the same assistant prompt as every other issue and comment, when the workflow runs on a project whose baseline has no approval record (a baseline written by `init`, `scan --write-inventory` or `ci init` has none). The found-lines are the first-review lines of section 9.7.
 ```markdown
 <!-- srclawyer-drift-check -->
 <!-- srclawyer-fingerprint:{hash} -->
@@ -663,13 +678,16 @@ When the baseline already existed, the second line is `Kept your existing .srcla
 
 ---
 
-## 12. Open for confirmation (revision 3) **[NEW r3]**
+## 12. Decisions recorded and open items (revision 3) **[NEW r3]**
 
-1. **First-review issue (section 7.4.3).** Recommended: create it, so a project whose baseline was never approved is not silent. The alternative is no message until something changes, which leaves the project in `needs-approval` with nobody told. If you drop it, the first-review wording in 7.4.3 and 7.6 goes and nothing else changes.
-2. **Case C (section 7.3).** Recommended: comment on a pull request that changes the baseline even when nothing new was found, since recording changes as reviewed leaves the scanner with nothing to report. Without it that approval would pass unseen.
-3. **The comment no longer has a table.** It lists the changes with the already-approved summary lines (section 3.2), which say "appears to handle" instead of the first draft's "which handles". Revision 2's table is dropped so there is one wording, not two.
-4. **The quoted prompt.** `Resolve the SrcLawyer privacy review in this project. Ask me any questions in plain English, and don't approve anything until I say yes.` I have not yet run this exact sentence through the transcript tests; I propose to add it as a scenario once it is approved.
-5. **Questions are listed in full** in the comment, without a cap. Worst case, on a project that never answered the setup questions, that is about fifteen bullets.
+**Decided by the owner**
+1. **First-review issue (section 7.4.3): kept.** Created once, never closed by SrcLawyer, with the same assistant prompt.
+2. **Case C (section 7.3): kept.** A pull request that changes the baseline file always gets the comment, even when nothing new was found, and the approval note is never shown.
+3. **Questions (section 7.2): all are listed, the first five are shown and the rest are in a collapsed block, sensitive questions first.**
+
+**Open**
+4. **The comment has no table.** It lists the changes with the already-approved summary lines (section 3.2), which say "appears to handle" instead of the first draft's "which handles". Revision 2's table is dropped so there is one wording, not two.
+5. **The quoted prompt** (`Resolve the SrcLawyer privacy review in this project. Ask me any questions in plain English, and don't approve anything until I say yes.`) has not been run through the transcript tests. Once the wording is final it becomes scenario S7, and a Supabase service-questions scenario becomes S6.
 6. **Artifacts** (section 7.5) are the policy draft and the review file, kept 7 days. In handwritten mode the draft contains source file names and line numbers, exactly as `scan` writes it; the docs sentence in Appendix C says artifacts inherit the repository's visibility.
 
 ## Appendix A. Assistant instructions (rules block, written to `AGENTS.md`) **[CHANGED r2]**
