@@ -247,6 +247,31 @@ describe("review mode: the pull-request comment", () => {
     expect(resolved.bodyOf(write)).toContain("## SrcLawyer: no new items found");
   });
 
+  it("on a baseline nobody has approved, an earlier comment is rewritten when the drift is gone, and a pull request that rewrites the baseline is still flagged", async () => {
+    const resolved = harness({ report: FIRST_REVIEW, event: PR_EVENT, gh: [{ match: COMMENTS, stdout: MARKED(99) }] });
+    await action.mainReview(resolved.deps);
+    expect(resolved.writes()).toHaveLength(1);
+    expect(resolved.writes()[0]).toContain("repos/acme/app/issues/comments/99");
+    expect(resolved.bodyOf(resolved.writes()[0])).toContain("## SrcLawyer: no new items found");
+
+    // The base branch's baseline was approved; this pull request's is not (the approval was removed along with an item).
+    const stripped = harness({
+      report: FIRST_REVIEW,
+      event: PR_EVENT,
+      baseline: BASELINE(["Twilio"], ["phone"]),
+      gh: [
+        { match: "pulls/7/files", stdout: ".srclawyer.inventory.json\n" },
+        { match: "compare/", stdout: "m".repeat(40) },
+        { match: "contents/.srclawyer.inventory.json", stdout: BASELINE(["Stripe", "Twilio"], ["payment_info", "phone"], { review: "a", note: "yes" }) },
+      ],
+    });
+    await action.mainReview(stripped.deps);
+    expect(stripped.writes()).toHaveLength(1);
+    const body = stripped.bodyOf(stripped.writes()[0]);
+    expect(body).toContain("## SrcLawyer: this pull request changes the approved review state");
+    expect(body).toContain("- Services no longer recorded: Stripe.");
+  });
+
   it("posts nothing for a first review, an inconclusive run or an error, and the summary explains an inconclusive one", async () => {
     for (const report of [FIRST_REVIEW, INCONCLUSIVE]) {
       const h = harness({ report, event: PR_EVENT });

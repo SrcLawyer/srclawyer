@@ -375,7 +375,7 @@ No new items found by the scanner since your last approved review. This is not a
 
 {footer block}
 ```
-**No comment is posted** when nothing is new, the baseline file is unchanged and there is no earlier comment; when the scan could not finish (the run summary says so, section 7.5); when the pull request comes from a fork (the token is read-only; the run summary carries the content); when the branch the pull request targets has no baseline file yet (there is no earlier review state to change); and on a first review (section 9.7), which is reported only through the issue (section 7.4.3).
+**No comment is posted** when nothing is new, the baseline file is unchanged and there is no earlier comment; when the scan could not finish (the run summary says so, section 7.5); when the pull request comes from a fork (the token is read-only; the run summary carries the content); when the branch the pull request targets has no baseline file yet (there is no earlier review state to change); and on a first review (section 9.7), which is reported only through the issue (section 7.4.3), unless an earlier comment exists (it is then rewritten as in case D, because what it described is gone) or the pull request changes the baseline file (case C) **[CHANGED r3.1]**.
 
 ### 7.4 Issue (default branch pushes, scheduled runs and manual runs on the default branch)
 

@@ -395,22 +395,26 @@ export async function mainReview(rawDeps = defaultDeps()) {
   // ---- pull request: one comment, kept up to date (cases A to D) ----
   let postComment = null;
   if (isPullRequest && pr && repo && inputs.token) {
-    if (view.kind === "drift" || view.kind === "no-drift") {
+    // A baseline nobody has approved reads as a first review, but a pull request that rewrites the
+    // baseline must still be seen, so every conclusive result looks at it.
+    if (view.kind === "drift" || view.kind === "no-drift" || view.kind === "first-review") {
       const detected = detectBaselineChange({ gh, repo, pr, cwd, inputs, deps, text });
       if (detected.failed) commentFailed = true;
       else if (detected.change) {
-        if (view.kind === "no-drift") view = { kind: "baseline-changed", change: detected.change };
-        else view.baselineChanged = true;
+        if (view.kind === "drift") view.baselineChanged = true;
+        else view = { kind: "baseline-changed", change: detected.change };
       }
     }
     postComment = () => {
       if (fork) return note(A.noteFork);
-      if (!["drift", "no-drift", "baseline-changed"].includes(view.kind)) return;
+      // A first review is reported through the issue; on a pull request it only rewrites an earlier comment that no longer applies.
+      const commentView = view.kind === "first-review" ? { kind: "no-drift" } : view;
+      if (!["drift", "no-drift", "baseline-changed"].includes(commentView.kind)) return;
       const listed = gh(["api", "--paginate", `repos/${repo}/issues/${pr.number}/comments`, "--jq", ".[] | {id, body}"]);
       if (listed.error || listed.status !== 0) return warn(A.noteCommentFailed);
       const existing = parseLines(listed.stdout).find((c) => typeof c.body === "string" && c.body.includes(text.COMMENT_MARKER));
-      if (view.kind === "no-drift" && !existing) return;
-      const body = text.renderComment(view, ctx);
+      if (commentView.kind === "no-drift" && !existing) return;
+      const body = text.renderComment(commentView, ctx);
       const sent = existing
         ? gh(["api", "-X", "PATCH", `repos/${repo}/issues/comments/${existing.id}`, "-f", `body=${body}`])
         : gh(["api", "-X", "POST", `repos/${repo}/issues/${pr.number}/comments`, "-f", `body=${body}`]);
