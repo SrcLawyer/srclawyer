@@ -1,6 +1,7 @@
 import { FIRST_REVIEW, REVIEW, SUMMARY } from "../assistant/wording.js";
 import { SENSITIVE_CATEGORIES, categoryLabel, lowerLabel } from "../assistant/labels.js";
 import { PROCESSOR_PROFILES } from "../rules/processorProfiles.js";
+import { DATA_CATEGORY_LABELS } from "./dataCategoryLabels.js";
 import type { InventoryDiff } from "../inventory/inventory.js";
 import type { TriggeredQuestion } from "../assistant/questions.js";
 
@@ -82,25 +83,59 @@ export interface SummaryInput {
   blankCount: number;
 }
 
+/** Name shown in place of a service or kind of data that is not in SrcLawyer's own tables (catalog section 7.1). */
+export const UNRECOGNIZED_SERVICE = "a service this version of SrcLawyer doesn't recognize";
+export const UNRECOGNIZED_DATA = "a kind of data this version of SrcLawyer doesn't recognize";
+
+const KNOWN_PROCESSORS: ReadonlySet<string> = new Set(Object.values(PROCESSOR_PROFILES).map((p) => p.name));
+export const isKnownProcessor = (name: string): boolean => KNOWN_PROCESSORS.has(name);
+export const isKnownCategory = (category: string): boolean => Object.hasOwn(DATA_CATEGORY_LABELS, category);
+
+export interface ChangeLineOptions {
+  /** Put the name or label in bold (for GitHub Markdown). */
+  bold?: boolean;
+  /**
+   * Show a name that is not in SrcLawyer's own tables as "a service/kind of data this version of SrcLawyer
+   * doesn't recognize". Names can only come from the baseline file, which a pull request can edit, so
+   * anything that reaches a public comment is passed through this (catalog section 7.1).
+   */
+  onlyKnown?: boolean;
+}
+
+/**
+ * The "what changed" sentences of docs/question-catalog.md section 3.2 (first review: section 9.7), without
+ * the question, blank and "nothing published" lines. On a first review the intro line is not included.
+ */
+export function buildChangeLines(diff: InventoryDiff, firstReview: boolean, options: ChangeLineOptions = {}): string[] {
+  const mark = (text: string): string => (options.bold ? `**${text}**` : text);
+  const lines: string[] = [];
+  const service = (name: string, template: string): void => {
+    if (options.onlyKnown && !isKnownProcessor(name)) lines.push(template.replace("{Name}", UNRECOGNIZED_SERVICE));
+    else lines.push(template.replace("{Name}", mark(name)));
+  };
+  const data = (category: string, template: string, childrenTemplate?: string): void => {
+    if (options.onlyKnown && !isKnownCategory(category)) lines.push(template.replace("{label in lower case}", UNRECOGNIZED_DATA));
+    else if (category === "childrens_data" && childrenTemplate) lines.push(childrenTemplate);
+    else lines.push(template.replace("{label in lower case}", mark(lowerLabel(category))));
+  };
+  if (firstReview) {
+    if (diff.added.categories.length === 0 && diff.added.processors.length === 0) lines.push(FIRST_REVIEW.nothingFound);
+    for (const name of diff.added.processors) service(name, FIRST_REVIEW.uses);
+    for (const category of diff.added.categories) data(category, FIRST_REVIEW.handles, FIRST_REVIEW.handlesChildren);
+  } else {
+    for (const name of diff.added.processors) service(name, SUMMARY.added);
+    for (const category of diff.added.categories) data(category, SUMMARY.addedData, SUMMARY.addedChildren);
+  }
+  for (const name of diff.removed.processors) service(name, SUMMARY.removed);
+  for (const category of diff.removed.categories) data(category, SUMMARY.removedData);
+  return lines;
+}
+
 /** Plain-English "what changed" lines (docs/question-catalog.md section 3.2). */
 export function buildSummary(input: SummaryInput): string[] {
-  const { diff } = input;
   const lines: string[] = [];
-  if (input.firstReview) {
-    lines.push(FIRST_REVIEW.summaryIntro);
-    if (diff.added.categories.length === 0 && diff.added.processors.length === 0) lines.push(FIRST_REVIEW.nothingFound);
-    for (const name of diff.added.processors) lines.push(FIRST_REVIEW.uses.replace("{Name}", name));
-    for (const category of diff.added.categories) {
-      lines.push(category === "childrens_data" ? FIRST_REVIEW.handlesChildren : FIRST_REVIEW.handles.replace("{label in lower case}", lowerLabel(category)));
-    }
-  } else {
-    for (const name of diff.added.processors) lines.push(SUMMARY.added.replace("{Name}", name));
-    for (const category of diff.added.categories) {
-      lines.push(category === "childrens_data" ? SUMMARY.addedChildren : SUMMARY.addedData.replace("{label in lower case}", lowerLabel(category)));
-    }
-  }
-  for (const name of diff.removed.processors) lines.push(SUMMARY.removed.replace("{Name}", name));
-  for (const category of diff.removed.categories) lines.push(SUMMARY.removedData.replace("{label in lower case}", lowerLabel(category)));
+  if (input.firstReview) lines.push(FIRST_REVIEW.summaryIntro);
+  lines.push(...buildChangeLines(input.diff, input.firstReview === true));
   if (input.questionCount > 0) {
     lines.push((input.questionCount === 1 ? SUMMARY.questionsOne : SUMMARY.questionsMany).replace("{n}", String(input.questionCount)));
   }

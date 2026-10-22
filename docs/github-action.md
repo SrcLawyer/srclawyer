@@ -33,6 +33,7 @@ git add .srclawyer.inventory.json && git commit -m "Add SrcLawyer baseline"
 | `path` | `.` | Directory to check. |
 | `fail-on-drift` | `true` | When `false`, drift is a warning annotation instead of a failure. |
 | `fail-on-inconclusive` | `false` | When `true`, "no verdict" fails the step. By default it is a warning. |
+| `mode` | `check` | `check` is the drift check described above. `review` runs `srclawyer update` and reports as a comment or an issue; see [Review mode](#review-mode). |
 | `pr-comment` | `false` | Post one comment on the pull request and keep it updated. Needs `pull-requests: write`. Skipped on pull requests from forks. |
 | `github-token` | `github.token` | Used only for that comment. |
 
@@ -97,6 +98,53 @@ permissions:
           srclawyer-version: 0.9.0
           pr-comment: "true"
 ```
+
+## Review mode
+
+`srclawyer ci init` writes this for you; this section says what it does. It needs SrcLawyer 0.10.0 or later.
+
+In review mode the Action runs `srclawyer update`. On a pull request it keeps one comment up to date; on the default branch and on scheduled runs it keeps one issue, titled "Privacy policy review needed", up to date and never closes it. It posts nothing when it finds nothing new.
+
+- **What the comment and the issue say.** What the scanner found in plain English, the questions that need an answer (the first five, the rest collapsed, sensitive ones first), the coverage line, and how to resolve it with an AI coding assistant or by hand. They contain no file names, paths or source lines, and never the approval note.
+- **First review.** A baseline nobody has approved yet gets one issue ("your first privacy review is waiting") on the default branch. It is not repeated for pull requests.
+- **A pull request that changes the baseline.** A pull request that changes `.srclawyer.inventory.json` gets a comment saying so, even when the scanner found nothing new, because recording changes as reviewed is an approval that a reviewer should see. It lists the services and kinds of personal data the pull request now records as reviewed.
+- **When nothing is new.** An earlier comment is rewritten to "no new items found". An open issue is rewritten the same way; close it when you have looked at it. An issue you closed is not reopened or recreated for the same items.
+- **When the scan can't finish** (the confidence service is unreachable, files were skipped, or the baseline and the run used different file discovery) there is no comment, no issue and no artifact, only the run summary.
+- **Forks.** Pull requests from forks get a read-only token, so they get no comment; the result is in the run summary.
+- **Artifacts.** The run uploads the policy draft and the review file as an artifact named `srclawyer-review`, kept for 7 days. Artifacts inherit the repository's visibility. In handwritten mode the draft contains the same source file names and line numbers as `srclawyer scan` writes.
+- **Advisory.** The workflow that `srclawyer ci init` writes sets `fail-on-drift` to `"false"`, so a finding is a comment or an issue, not a failed check. Set it to `"true"` if you want a failed check.
+- **Permissions.** `pull-requests: write` on the job that handles pull requests, `issues: write` on the job that handles pushes and scheduled runs, and `contents: read` on both. `srclawyer ci init` writes them as two jobs so that each has only the permission it needs. Issues must be turned on for the repository. A failed GitHub call is a warning and never changes the result.
+
+```yaml
+name: SrcLawyer privacy review
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  pull-request:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v7          # pin to a commit sha in your own workflows
+      - uses: SrcLawyer/srclawyer@v0.10.0
+        with: { srclawyer-version: 0.10.0, mode: review, fail-on-drift: "false" }
+  default-branch:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions: { contents: read, issues: write }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: SrcLawyer/srclawyer@v0.10.0
+        with: { srclawyer-version: 0.10.0, mode: review, fail-on-drift: "false" }
+```
+
+`srclawyer ci init` writes the full file (with the actions pinned to commits and a concurrency group) only with your yes, never over an existing file, and commits and pushes nothing. `pr-comment` is ignored in review mode.
 
 ## Writing the baseline on the runner
 

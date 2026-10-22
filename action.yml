@@ -34,9 +34,18 @@ inputs:
     required: false
     default: "false"
   github-token:
-    description: Token used only for the optional pull request comment.
+    description: Token used only for the pull request comment and the issue.
     required: false
     default: ${{ github.token }}
+  mode:
+    description: >-
+      check (the default) fails or warns on drift, as before. review runs `srclawyer update` instead:
+      on a pull request it keeps one comment up to date, on the default branch and on scheduled runs one
+      issue titled "Privacy policy review needed", and it uploads the policy draft and the review file as the
+      artifact srclawyer-review. Review mode needs pull-requests: write (pull request job) or issues: write
+      (default-branch job), and ignores pr-comment.
+    required: false
+    default: check
 
 outputs:
   result:
@@ -66,3 +75,12 @@ runs:
         INPUT_FAIL_ON_INCONCLUSIVE: ${{ inputs.fail-on-inconclusive }}
         INPUT_PR_COMMENT: ${{ inputs.pr-comment }}
         INPUT_GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_MODE: ${{ inputs.mode }}
+    - name: Upload the policy draft and the review file
+      if: ${{ always() && inputs.mode == 'review' }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: srclawyer-review
+        path: ${{ runner.temp }}/srclawyer-review
+        if-no-files-found: ignore
+        retention-days: 7

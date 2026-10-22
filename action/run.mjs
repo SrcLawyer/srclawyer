@@ -34,6 +34,7 @@ export function readInputs(env) {
     failOnInconclusive: truthy(env.INPUT_FAIL_ON_INCONCLUSIVE, false),
     prComment: truthy(env.INPUT_PR_COMMENT, false),
     token: env.INPUT_GITHUB_TOKEN || "",
+    mode: (env.INPUT_MODE || "check").trim().toLowerCase(),
   };
 }
 
@@ -218,6 +219,285 @@ export function main(deps = defaultDeps()) {
   return outcome.failed ? 1 : 0;
 }
 
+
+// ---------------------------------------------------------------------------------------------------
+// mode: review (docs/question-catalog.md section 7). The wording and the renderers live in the installed
+// CLI (dist/report/reviewText.js), so the Action holds no copy of them; this part gathers the facts,
+// calls GitHub, and never lets a GitHub failure change the result.
+// ---------------------------------------------------------------------------------------------------
+import { copyFileSync, existsSync, readdirSync } from "node:fs";
+import { posix, relative, basename } from "node:path";
+
+export const REVIEW_DIRNAME = "srclawyer-review";
+
+async function loadReviewText(prefix) {
+  const file = join(prefix, "node_modules", "srclawyer", "dist", "report", "reviewText.js");
+  return import(pathToFileURL(file).href);
+}
+
+function reviewDeps(deps) {
+  return {
+    exists: existsSync,
+    listDir: (p) => readdirSync(p),
+    copyFile: copyFileSync,
+    loadText: loadReviewText,
+    ...deps,
+  };
+}
+
+/** The pinned CLI as `npx` is told to run it. */
+export function npxTarget(spec) {
+  return EXACT_VERSION.test(spec) ? `srclawyer@${spec}` : spec;
+}
+
+function parseLines(stdout) {
+  return (stdout ?? "")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter((v) => v !== null);
+}
+
+/** Repo-relative path of the baseline, or null if it points outside the repository. */
+export function baselineRepoPath(path, inventoryPath) {
+  const joined = posix.normalize(posix.join(path.replace(/\\/g, "/"), inventoryPath.replace(/\\/g, "/")));
+  if (joined.startsWith("../") || joined === ".." || posix.isAbsolute(joined)) return null;
+  return joined.replace(/^\.\//, "");
+}
+
+export async function mainReview(rawDeps = defaultDeps()) {
+  const deps = reviewDeps(rawDeps);
+  const inputs = readInputs(deps.env);
+  const note = (message) => deps.log(`::notice title=SrcLawyer::${escapeAnnotation(message)}`);
+  const warn = (message) => deps.log(`::warning title=SrcLawyer::${escapeAnnotation(message)}`);
+  const fail = (message) => {
+    deps.log(`::error title=SrcLawyer drift check::${escapeAnnotation(message)}`);
+    setOutputs(deps, { result: "error", added: "", removed: "" });
+    if (deps.env.GITHUB_STEP_SUMMARY) deps.appendFile(deps.env.GITHUB_STEP_SUMMARY, `## SrcLawyer drift check: error\n\n${message}\n`);
+    return 1;
+  };
+
+  const validated = validateVersionSpec(inputs.version);
+  if (!validated.ok) return fail(validated.reason);
+  const spec = validated.spec;
+
+  const temp = deps.env.RUNNER_TEMP || deps.env.TMPDIR || "/tmp";
+  const prefix = join(temp, "srclawyer-action");
+  mkdirSync(prefix, { recursive: true });
+  deps.log(`::group::Install srclawyer (${spec})`);
+  const installed = deps.run("npm", ["install", "--prefix", prefix, "--no-audit", "--no-fund", "--loglevel=error", npxTarget(spec)], { stdio: ["ignore", "inherit", "inherit"] });
+  deps.log("::endgroup::");
+  if (installed.error || installed.status !== 0) return fail(`could not install srclawyer (${spec}) with npm.`);
+
+  let text;
+  try {
+    text = await deps.loadText(prefix);
+    if (typeof text.renderRunSummary !== "function") throw new Error("no review mode");
+  } catch {
+    return fail(`srclawyer ${spec} does not have the review mode. Use 0.10.0 or later, or set mode to check.`);
+  }
+
+  const cwd = resolve(inputs.path);
+  const outDir = join(temp, REVIEW_DIRNAME);
+  mkdirSync(outDir, { recursive: true });
+  const updated = deps.run("node", [join(prefix, "node_modules", "srclawyer", "dist", "cli.js"), "update", "--format", "json", "--inventory", inputs.inventoryPath, "--out-dir", relative(cwd, outDir)], { cwd });
+  if (updated.stderr) deps.log(updated.stderr.trimEnd());
+
+  let report = null;
+  try {
+    report = JSON.parse(updated.stdout);
+  } catch {
+    report = null;
+  }
+
+  // Exit codes as for `check`: 0 no new items (or a first review), 1 new items, 3 inconclusive; anything else is an error.
+  const known = { 0: "no-drift", 1: "drift", 3: "inconclusive" };
+  let result = known[updated.status];
+  if (result === undefined || !report || report.result !== result) result = "error";
+  const failed = result === "error" || (result === "drift" && inputs.failOnDrift) || (result === "inconclusive" && inputs.failOnInconclusive);
+  const level = result === "error" ? "error" : failed ? "error" : result === "drift" ? "warning" : result === "inconclusive" ? "warning" : null;
+  const errorMessage = report?.error ?? `srclawyer update failed (exit code ${updated.status}). See the log above.`;
+  const firstReview = result === "no-drift" && report?.firstReview === true;
+
+  const flat = result === "drift" ? flattenDiff(report.diff) : { added: [], removed: [] };
+  setOutputs(deps, { result, added: flat.added.join(","), removed: flat.removed.join(",") });
+
+  const A = text.ACTION;
+  if (result === "error") deps.log(`::error title=SrcLawyer drift check::${escapeAnnotation(errorMessage)}`);
+  else if (firstReview) warn(A.noteFirst);
+  else if (result === "drift") deps.log(`::${level} title=SrcLawyer::${escapeAnnotation(A.noteLook)}`);
+  else if (result === "inconclusive") deps.log(`::${level} title=SrcLawyer drift check::${escapeAnnotation(`No drift verdict: ${report.inconclusiveReasons.length} problem(s) made the scan incomplete or not comparable.`)}`);
+
+  // ---- what happened, as a view the renderers understand ----
+  const questions = (report?.questions ?? []).map((q) => ({ ask: q.ask, sensitive: q.sensitive === true }));
+  let view;
+  let fingerprint = null;
+  if (result === "error") view = { kind: "error", message: errorMessage };
+  else if (result === "inconclusive") view = { kind: "inconclusive", reasons: report.inconclusiveReasons };
+  else if (result === "drift") {
+    view = { kind: "drift", changes: text.buildChangeLines(report.diff, false, { bold: true, onlyKnown: true }), questions, baselineChanged: false };
+    fingerprint = text.fingerprintOf(text.diffItems(report.diff));
+  } else if (firstReview) {
+    let baselineText = null;
+    try {
+      baselineText = deps.readFile(join(cwd, inputs.inventoryPath));
+    } catch {
+      baselineText = null;
+    }
+    const found = baselineText === null ? null : text.firstReviewLines(baselineText);
+    if (found) {
+      view = { kind: "first-review", lines: found.lines, questions };
+      fingerprint = text.fingerprintOf(found.items);
+    } else view = { kind: "no-drift" };
+  } else view = { kind: "no-drift" };
+
+  // ---- artifacts: the generated policy joins the draft and the review file when `update` rewrote it itself ----
+  if (report?.policy?.written) {
+    try {
+      deps.copyFile(join(cwd, report.policy.path), join(outDir, basename(report.policy.path)));
+    } catch {
+      /* the artifact is a convenience */
+    }
+  }
+  let artifacts = false;
+  try {
+    artifacts = deps.listDir(outDir).length > 0;
+  } catch {
+    artifacts = false;
+  }
+
+  const eventName = deps.env.GITHUB_EVENT_NAME;
+  const repo = deps.env.GITHUB_REPOSITORY;
+  const runLink = deps.env.GITHUB_SERVER_URL && repo && deps.env.GITHUB_RUN_ID ? `${deps.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${deps.env.GITHUB_RUN_ID}` : null;
+  const ctx = { target: npxTarget(spec), coverage: report && result !== "error" ? report.coverage : null, runLink };
+  const gh = (args) => deps.run("gh", args, { env: { ...deps.env, GH_TOKEN: inputs.token } });
+
+  let event = null;
+  if (deps.env.GITHUB_EVENT_PATH) {
+    try {
+      event = JSON.parse(deps.readFile(deps.env.GITHUB_EVENT_PATH));
+    } catch {
+      event = null;
+    }
+  }
+
+  const isPullRequest = eventName === "pull_request";
+  const pr = isPullRequest ? event?.pull_request : null;
+  const fork = isPullRequest && Boolean(pr) && pr.head?.repo?.full_name !== repo;
+  let commentFailed = false;
+
+  // ---- pull request: one comment, kept up to date (cases A to D) ----
+  let postComment = null;
+  if (isPullRequest && pr && repo && inputs.token) {
+    if (view.kind === "drift" || view.kind === "no-drift") {
+      const detected = detectBaselineChange({ gh, repo, pr, cwd, inputs, deps, text });
+      if (detected.failed) commentFailed = true;
+      else if (detected.change) {
+        if (view.kind === "no-drift") view = { kind: "baseline-changed", change: detected.change };
+        else view.baselineChanged = true;
+      }
+    }
+    postComment = () => {
+      if (fork) return note(A.noteFork);
+      if (!["drift", "no-drift", "baseline-changed"].includes(view.kind)) return;
+      const listed = gh(["api", "--paginate", `repos/${repo}/issues/${pr.number}/comments`, "--jq", ".[] | {id, body}"]);
+      if (listed.error || listed.status !== 0) return warn(A.noteCommentFailed);
+      const existing = parseLines(listed.stdout).find((c) => typeof c.body === "string" && c.body.includes(text.COMMENT_MARKER));
+      if (view.kind === "no-drift" && !existing) return;
+      const body = text.renderComment(view, ctx);
+      const sent = existing
+        ? gh(["api", "-X", "PATCH", `repos/${repo}/issues/comments/${existing.id}`, "-f", `body=${body}`])
+        : gh(["api", "-X", "POST", `repos/${repo}/issues/${pr.number}/comments`, "-f", `body=${body}`]);
+      if (sent.error || sent.status !== 0) warn(A.noteCommentFailed);
+    };
+  }
+
+  // ---- default branch, schedule, manual run: one issue, kept up to date and never closed (7.4) ----
+  let postIssue = null;
+  if (["push", "schedule", "workflow_dispatch"].includes(eventName) && repo && inputs.token) {
+    const defaultBranch = event?.repository?.default_branch;
+    const onDefault = defaultBranch ? deps.env.GITHUB_REF === `refs/heads/${defaultBranch}` : false;
+    if (!onDefault) {
+      if (eventName === "workflow_dispatch") note(A.noteNotDefault);
+    } else {
+      postIssue = () => {
+        if (!["drift", "first-review", "no-drift"].includes(view.kind)) return;
+        const listed = gh(["api", "--paginate", `repos/${repo}/issues?state=all&per_page=100`, "--jq", ".[] | select(.pull_request == null) | {number, title, state, body}"]);
+        if (listed.error || listed.status !== 0) return warn(A.noteIssueFailed);
+        const ours = parseLines(listed.stdout)
+          .filter((i) => i.title === A.issueTitle && typeof i.body === "string" && i.body.includes(text.COMMENT_MARKER))
+          .sort((a, b) => b.number - a.number);
+        const open = ours.find((i) => i.state === "open");
+        const closed = ours.find((i) => i.state === "closed");
+        if (view.kind === "no-drift" && !open) return;
+        const body = text.renderIssue(view, ctx, fingerprint ?? "");
+        if (open) {
+          const sent = gh(["api", "-X", "PATCH", `repos/${repo}/issues/${open.number}`, "-f", `body=${body}`]);
+          if (sent.error || sent.status !== 0) warn(A.noteIssueFailed);
+          return;
+        }
+        const closedFingerprint = closed ? text.FINGERPRINT_PATTERN.exec(closed.body)?.[1] : null;
+        if (closedFingerprint && closedFingerprint === fingerprint) return note(A.noteIssueClosed);
+        const sent = gh(["api", "-X", "POST", `repos/${repo}/issues`, "-f", `title=${A.issueTitle}`, "-f", `body=${body}`]);
+        if (sent.error || sent.status !== 0) warn(A.noteIssueFailed);
+      };
+    }
+  }
+
+  if (commentFailed) warn(A.noteCommentFailed);
+  if (deps.env.GITHUB_STEP_SUMMARY) {
+    deps.appendFile(deps.env.GITHUB_STEP_SUMMARY, text.renderRunSummary(view, ctx, { issueText: !isPullRequest, artifacts, fork }));
+  }
+  if (!commentFailed) postComment?.();
+  postIssue?.();
+
+  return failed ? 1 : 0;
+}
+
+/**
+ * Whether this pull request changes the baseline file, and what it changes. Compares the baseline at the
+ * point the branch left its base with the one in the pull request. A pull request that adds the very first
+ * baseline changes nothing that was approved, so it reports no change. Any API problem is a failure, never a guess.
+ */
+export function detectBaselineChange({ gh, repo, pr, cwd, inputs, deps, text }) {
+  const none = { failed: false, change: null };
+  const workspace = deps.env.GITHUB_WORKSPACE || process.cwd();
+  const repoPath = baselineRepoPath(relative(workspace, cwd) || ".", inputs.inventoryPath);
+  if (!repoPath) return none;
+  const files = gh(["api", "--paginate", `repos/${repo}/pulls/${pr.number}/files`, "--jq", ".[].filename"]);
+  if (files.error || files.status !== 0) return { failed: true, change: null };
+  if (!files.stdout.split("\n").includes(repoPath)) return none;
+
+  const base = gh(["api", `repos/${repo}/compare/${pr.base?.sha}...${pr.head?.sha}`, "--jq", ".merge_base_commit.sha"]);
+  if (base.error || base.status !== 0) return { failed: true, change: null };
+  const before = gh(["api", "-H", "Accept: application/vnd.github.raw+json", `repos/${repo}/contents/${encodeURI(repoPath)}?ref=${base.stdout.trim()}`]);
+  if (before.error || before.status !== 0) return none; // not in the base branch yet: there is no earlier review state to change
+  let after;
+  try {
+    after = deps.readFile(join(cwd, inputs.inventoryPath));
+  } catch {
+    return { failed: true, change: null };
+  }
+  const change = text.describeBaselineChange(before.stdout, after);
+  return { failed: false, change };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main();
+  const mode = readInputs(process.env).mode;
+  if (mode === "review") {
+    mainReview().then((code) => {
+      process.exitCode = code;
+    });
+  } else if (mode === "check") {
+    process.exitCode = main();
+  } else {
+    process.stdout.write(`::error title=SrcLawyer drift check::mode must be "check" or "review" (got "${mode}")\n`);
+    process.exitCode = 1;
+  }
 }

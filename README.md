@@ -29,6 +29,7 @@ srclawyer init --yes            # for an assistant: set up with blank answers an
 srclawyer init --policy-mode generated   # the policy file becomes a build output
 srclawyer agent-setup           # show (then, with your yes, write) the instructions for your coding assistant
 srclawyer status --json         # for an assistant: where things stand (also: questions, answer, approve)
+srclawyer ci init               # with your yes, write one GitHub workflow that reports changes as pull request comments and issues
 ```
 
 If `srclawyer` isn't found right after a global install, see [Troubleshooting: command not found](#troubleshooting-command-not-found) below.
@@ -184,6 +185,12 @@ Drift fails the check, and the step summary lists what was added and removed wit
 
 `scan`'s "completed with warnings" (1) and `check`'s "inconclusive" (3) are the same condition under different numbers; `scan`'s was left alone so existing scripts keep working. Example workflows (pull requests, a weekly schedule, manual dispatch, writing the baseline on the runner) are in [docs/github-action.md](docs/github-action.md).
 
+### Review mode, and `srclawyer ci init`
+
+In review mode (`mode: review`) the Action runs `srclawyer update` instead of failing the check. On a pull request it keeps one comment up to date; on the default branch and on scheduled runs it keeps one issue, titled "Privacy policy review needed", up to date and never closes it. It posts nothing when it finds nothing new. Both say what the scanner found in plain English, list the questions, and tell you to ask your AI coding assistant to resolve the review (with a by-hand fallback). They contain no file names or source lines. A pull request that changes `.srclawyer.inventory.json` also gets a comment saying so, because recording changes as reviewed is an approval that a reviewer should see. Nothing is merged, published or dated.
+
+`srclawyer ci init` writes the workflow for you: with your yes (or `--yes`) it creates `.github/workflows/srclawyer.yml` and, if you have none, the baseline. It never overwrites a file, commits nothing, and leaves your policy alone. The workflow it writes is advisory (`fail-on-drift: "false"`), pinned to this version, and gives each of its two jobs only the permission it needs. See [docs/github-action.md](docs/github-action.md#review-mode).
+
 ## Removing SrcLawyer
 
 SrcLawyer writes only these files into your project, and only when you ask it to:
@@ -194,11 +201,12 @@ SrcLawyer writes only these files into your project, and only when you ask it to
 - `.srclawyer.inventory.json`, written when you pass `--write-inventory` to `scan` (or the path you give it), and updated by `srclawyer approve`, which adds your approval note.
 - `.srclawyer/`, a small machine-local folder written by `update` and `answer`, and where copies of a policy file you wrote are kept before it is replaced (`.srclawyer/backups/`); it contains its own `.gitignore` so nothing in it is committed, and it is safe to delete.
 - A single value in `.srclawyer.config.yml` each time `srclawyer answer` records an answer.
+- `.github/workflows/srclawyer.yml`, written by `srclawyer ci init` (only with your yes).
 - `srclawyer agent-setup` (only with your yes): a marked section in `AGENTS.md`, and in `CLAUDE.md` if it already exists; `.claude/skills/srclawyer-privacy/SKILL.md`; and, only if you agree, four rules under `permissions.ask` in `.claude/settings.json`. Remove the marked section (from its `srclawyer:agent-rules:start` line to its `srclawyer:agent-rules:end` line), the skill folder, and those four rules to undo it.
 
 Delete whichever of them you no longer want. No other SrcLawyer command writes files: `srclawyer check` is read-only, and installing the package writes nothing to your project.
 
-SrcLawyer never creates a workflow file. To stop the [GitHub Action](#drift-check-github-action), delete or edit the workflow you added yourself (for example `.github/workflows/srclawyer.yml`).
+SrcLawyer creates a GitHub workflow file only when you run `srclawyer ci init` and say yes (or pass `--yes`). It never overwrites an existing workflow file and creates one in no other way. To stop the [GitHub Action](#drift-check-github-action), delete or edit `.github/workflows/srclawyer.yml`.
 
 To remove the command-line tool:
 

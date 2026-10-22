@@ -48,6 +48,7 @@ describe("readInputs", () => {
       failOnInconclusive: false,
       prComment: false,
       token: "",
+      mode: "check",
     });
   });
 
@@ -375,7 +376,7 @@ describe("action.yml", () => {
   const text = readFileSync(join(ROOT, "action.yml"), "utf8");
 
   it("declares exactly the documented inputs -- and no config-path", () => {
-    expect(Object.keys(manifest.inputs).sort()).toEqual(["fail-on-drift", "fail-on-inconclusive", "github-token", "inventory-path", "path", "pr-comment", "srclawyer-version"]);
+    expect(Object.keys(manifest.inputs).sort()).toEqual(["fail-on-drift", "fail-on-inconclusive", "github-token", "inventory-path", "mode", "path", "pr-comment", "srclawyer-version"]);
     expect(manifest.inputs["srclawyer-version"].required).toBe(true);
     expect(manifest.inputs["fail-on-drift"].default).toBe("true");
     expect(manifest.inputs["fail-on-inconclusive"].default).toBe("false");
@@ -398,7 +399,7 @@ describe("action.yml", () => {
     expect(text).not.toMatch(/secrets\./);
     const env = manifest.runs.steps.find((s) => s.run)!.env!;
     expect(Object.keys(env).sort()).toEqual(
-      ["INPUT_FAIL_ON_DRIFT", "INPUT_FAIL_ON_INCONCLUSIVE", "INPUT_GITHUB_TOKEN", "INPUT_INVENTORY_PATH", "INPUT_PATH", "INPUT_PR_COMMENT", "INPUT_SRCLAWYER_VERSION"].sort()
+      ["INPUT_FAIL_ON_DRIFT", "INPUT_FAIL_ON_INCONCLUSIVE", "INPUT_GITHUB_TOKEN", "INPUT_INVENTORY_PATH", "INPUT_MODE", "INPUT_PATH", "INPUT_PR_COMMENT", "INPUT_SRCLAWYER_VERSION"].sort()
     );
     for (const name of Object.keys(env)) expect(readFileSync(join(ROOT, "action/run.mjs"), "utf8")).toContain(name);
   });
