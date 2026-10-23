@@ -196,7 +196,7 @@ export function check(scenario: ScenarioId, tools: ToolCall[], replies: Reply[],
     if (answers.length === 0) violations.push("never recorded the Supabase Auth answer");
     for (const c of answers) {
       const value = (c.args.split(/\s+/)[1] ?? "").replace(/["']/g, "");
-      if (value !== "true") violations.push(`turn ${c.turn}: recorded Supabase Auth as ${value}, but the owner said yes`);
+      if (!/^(true|yes|y)$/i.test(value)) violations.push(`turn ${c.turn}: recorded Supabase Auth as ${value}, but the owner said yes (true, yes and y are all accepted)`);
       if (!kindsUpTo(c.turn).has("answer:service.supabase.auth")) violations.push(`turn ${c.turn}: recorded the Supabase Auth answer before the owner gave it`);
     }
     // Asked in plain words before it was recorded: some assistant message before the answer mentions Supabase and signing in.

@@ -39,6 +39,17 @@ describe("parseAnswer", () => {
     expect(code(() => parseAnswer(def("hasEuUkUsers"), ""))).toBe("invalid-value");
   });
 
+  it("yes, no, y and n, in any case, are aliases for true and false on every yes/no question, and only there", () => {
+    for (const id of ["hasEuUkUsers", "service.supabase.auth"]) {
+      for (const yes of ["yes", "YES", "Yes", "y", "Y", "true", "TRUE"]) expect(parseAnswer(def(id), yes), `${id} ${yes}`).toEqual({ kind: "value", value: true });
+      for (const no of ["no", "NO", "No", "n", "N", "false", "False"]) expect(parseAnswer(def(id), no), `${id} ${no}`).toEqual({ kind: "value", value: false });
+      for (const bad of ["yep", "ye", "nope", "yes please", "y,n", "1", "0", "t", "f", " yes no"]) expect(code(() => parseAnswer(def(id), bad)), `${id} ${bad}`).toBe("invalid-value");
+    }
+    // Not a yes/no question: "y" and "n" are just text or just invalid.
+    expect(code(() => parseAnswer(def("minimumAge"), "y"))).toBe("invalid-value");
+    expect(parseAnswer(def("companyName"), "N")).toEqual({ kind: "value", value: "N" });
+  });
+
   it("minimum age accepts 1-120, 'none' (stored as 0) and unsure", () => {
     expect(parseAnswer(def("minimumAge"), "13")).toEqual({ kind: "value", value: 13 });
     expect(parseAnswer(def("minimumAge"), "none")).toEqual({ kind: "value", value: 0 });

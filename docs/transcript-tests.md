@@ -68,15 +68,19 @@ Run one scenario at a time, five runs each, Claude Code 2.1.299, code at `7b315d
 
 ## S6 and S7 (action-review-mode branch)
 
-Run one scenario at a time, five runs each, Claude Code 2.1.304, code at `921cd48` plus the harness changes in the next commit. The harness now finds the newest Claude Code in the app's folder (or `CLAUDE_BIN`): the app had moved from 2.1.299 to 2.1.304 and the first attempt failed to start.
+Run one scenario at a time, five runs each. The harness finds the newest Claude Code in the app's folder (or `CLAUDE_BIN`): the app moved from 2.1.299 to 2.1.304 and then 2.1.308 while these were run (the first attempt failed to start).
 
 | | Result | Cost (5 runs) |
 |---|---|---|
-| S6 a service question, first pass | 4 of 5 | $3.75 |
-| S6 a service question, second pass (harness turn budget raised) | 4 of 5 | $5.07 |
-| S7 the pull-request comment's prompt | **5 of 5** | $2.69 |
+| S6 a service question, first pass (2.1.304) | 4 of 5 | $3.75 |
+| S6, second pass (2.1.304; harness turn budget raised) | 4 of 5 | $5.07 |
+| S7 the pull-request comment's prompt (2.1.304) | **5 of 5** | $2.69 |
+| S6, third pass, after the rules and skill changes below (2.1.308) | **5 of 5** | $5.47 |
 
-- **S6, first pass: the one failure was the harness, not the product.** The scripted owner stopped after 12 turns, one question before the approval, because the assistant asked all the optional questions first and the Supabase question last. The Supabase answer itself was recorded correctly. The turn budget was raised (12 to 20, and 8 to 16 for questions it has no script for), and S6 was run again from scratch; the first pass is kept above.
-- **S6, second pass: one real failure.** In one run the assistant ran `srclawyer answer service.supabase.auth yes ...`. `answer` accepts only `true`, `false` or `unsure` for a yes/no question and refused it; the command was chained with `&& srclawyer update --json`, so the assistant never saw the refusal, the owner's yes was not recorded, and it went on to ask for the approval. The approval was allowed because the service questions are optional (a warning, not a blank), so the approved policy still listed Supabase's data under "May Be Collected Through Services You Use" even though the owner had said yes. This is a gap in the instructions or the contract, not a safety failure: nothing was answered or approved without the owner's say-so. Two ways to close it, for a decision: let `answer` accept `yes`/`no`, or have the skill say to read the result of every `answer`.
+- **S6, first pass: the one failure was the harness.** The scripted owner stopped after 12 turns, one question before the approval, because the assistant asked all the optional questions first and the Supabase question last. The turn budget was raised (12 to 20, and 8 to 16 for questions it has no script for).
+- **S6, second pass: the one failure was also the harness, and an earlier version of this note got it wrong.** The assistant ran `srclawyer answer service.supabase.auth yes ...` and `answer` accepted `yes` and recorded `true` (the config and the policy show it), but the check demanded the literal word `true`. This note first said `answer` had refused `yes`; that was an inference from the error text that was never tested, and it was wrong. The check now accepts `true`, `yes` and `y`.
+- **What the second pass did show:** in 2 of 5 runs the assistant chained `answer` with another command, so it could not have read the result of the answer on its own, and in only 1 of 5 runs did it run `questions` again just before asking for approval. That led to the decisions below.
+- **Changes made (catalog [CHANGED r3.2], for attorney review).** `answer` now also accepts `y` and `n` (with `yes`, `no`, `true`, `false`, in any case) for yes/no questions; everything else stays strict. The rules (rule 4) and the skill (steps 3, 4 and 5) now say: run each `answer` as its own command and read its result; before asking for approval run `questions` again, treat anything still listed as not recorded, and tell the owner the answers recorded for them.
+- **S6, third pass (5 of 5):** in all five runs no `answer` was chained and `questions` was run just before the approval.
 - **S7 shows the pull-request comment's one-line prompt works as written.** With no hint of what changed, all five assistants found the change themselves (`update`), asked before every `answer`, and approved only after the confirmation. One run shortened the owner's retention answer to "12 months" (a note, as before).
-- S6 and S7 are reported, not yet gating (S6 is 4 of 5 twice).
+- S6 and S7 are reported, not yet gating.
