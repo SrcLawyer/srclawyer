@@ -3,7 +3,7 @@
 // Manual or nightly; it spends model usage. See docs/transcript-tests.md.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { claudeTurn, type ToolCall } from "./claude.mts";
+import { claudeTurn, CLAUDE, type ToolCall } from "./claude.mts";
 import { analyticsProject, bareProject, envWith, makeShimDir } from "./fixtures.mts";
 import { check, nextReply, OPENING, type Reply, type ScenarioId, type SimState } from "./scenarios.mts";
 
@@ -12,13 +12,14 @@ const n = Number(process.argv[process.argv.indexOf("--n") + 1] ?? 1) || 1;
 const outDir = process.env.TRANSCRIPT_DIR ?? join(process.cwd(), "transcripts");
 mkdirSync(outDir, { recursive: true });
 
+console.log(`Claude Code: ${CLAUDE}`);
 const shim = makeShimDir();
 const env = envWith(shim);
 let totalCost = 0;
 const summary: Array<{ run: number; pass: boolean; turns: number; cost: number; violations: string[]; notes: string[] }> = [];
 
 for (let run = 1; run <= n; run++) {
-  const root = scenario === "S1" ? bareProject() : analyticsProject(shim, scenario === "S5");
+  const root = scenario === "S1" ? bareProject() : analyticsProject(shim, scenario === "S5", scenario === "S6");
   const state: SimState = { scenario, ambiguousSent: false, confirmed: false, turns: 0 };
   const replies: Reply[] = [{ index: 0, text: OPENING[scenario], kinds: [] }];
   const tools: ToolCall[] = [];

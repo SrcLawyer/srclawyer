@@ -155,3 +155,76 @@ export const SERVICE_SECTION = {
   warningMany:
     '{n} features of services you use are listed under "May Be Collected Through Services You Use" in your policy. Please confirm whether you use them before you publish.',
 } as const;
+
+// ---- GitHub Action review mode (catalog section 7) ----
+export const ACTION = {
+  headingLook: "## SrcLawyer: your privacy policy needs a quick look",
+  headingNoNew: "## SrcLawyer: no new items found",
+  headingBaseline: "## SrcLawyer: this pull request changes the approved review state",
+  headingFirst: "## SrcLawyer: your first privacy review is waiting",
+  headingCouldnt: "## SrcLawyer: couldn't finish checking",
+  differs: "This differs from your last approved review.",
+  noticeAbove: "**This pull request changes the approved review state.** Reviewer: please confirm that the changes listed above are intended.",
+  noticeBelow: "**This pull request changes the approved review state.** Reviewer: please confirm that the changes below are intended.",
+  servicesNow: "Services now recorded as reviewed: {names}.",
+  dataNow: "Kinds of personal data now recorded as reviewed: {labels in lower case}.",
+  servicesNo: "Services no longer recorded: {names}.",
+  dataNo: "Kinds of personal data no longer recorded: {labels in lower case}.",
+  listsUnchanged: "The services and kinds of personal data in the approved review state are unchanged.",
+  moreOne: "{k} more question",
+  moreMany: "{k} more questions",
+  assistantHeading: "### Fix it with your AI coding assistant",
+  assistantIntro: "Open this project in Claude Code, Cursor, or another coding assistant and say:",
+  assistantPrompt: "> Resolve the SrcLawyer privacy review in this project. Ask me any questions in plain English, and don't approve anything until I say yes.",
+  withQuestions: "It will ask you the questions above, update your privacy policy, and ask you to confirm before recording it as reviewed. Nothing is published automatically.",
+  withoutQuestions: "It will update your privacy policy and ask you to confirm before recording it as reviewed. Nothing is published automatically.",
+  setupSummary: "Assistant not set up yet?",
+  setupText: 'Tell it: "Set up SrcLawyer in this project: run `npx srclawyer@{version} agent-setup` and show me what it will change first."',
+  handSummary: "No assistant? Do it by hand",
+  handText:
+    "Answer the questions in `.srclawyer.config.yml`, run `npx srclawyer@{version} update`, read `PRIVACY_POLICY.review.md`, then run `npx srclawyer@{version} scan --write-inventory` and commit `.srclawyer.inventory.json`.",
+  foundBy: "Found by this run: {run link}",
+  closeIssue: "You can close this issue once you have looked at it.",
+  notLegalAdvice: "_This is automated analysis, not legal advice._",
+  artifacts: 'The policy draft and the review file are attached to this run as the artifact "srclawyer-review". They are kept for 7 days.',
+  fork: "This pull request comes from a fork, so no comment was posted and the result is shown here instead.",
+  couldntFinish: "SrcLawyer couldn't finish checking, so there is no result this time. This is not a finding that anything changed. Reasons:",
+  issueTitle: "Privacy policy review needed",
+  // Annotations (section 7.6)
+  noteLook: "Your privacy policy needs a quick look. The details are in the run summary.",
+  noteFirst: "Your first privacy review is waiting. The details are in the run summary.",
+  noteFork: "No comment was posted because this pull request comes from a fork. The result is in the run summary.",
+  noteCommentFailed: "Couldn't post the comment. Check that the job has pull-requests: write. The check result is not affected.",
+  noteIssueFailed: "Couldn't create or update the issue. Check that Issues are turned on for this repository and that the job has issues: write. The check result is not affected.",
+  noteIssueClosed: "No issue was created because an issue for these same items was already closed.",
+  noteNotDefault: "This run is not on the default branch, so only the run summary was written.",
+} as const;
+
+// ---- srclawyer ci init (catalog section 11) ----
+export const CI_INIT = {
+  intro: "SrcLawyer will set up a GitHub workflow in this project:",
+  createWorkflow: "  - create .github/workflows/srclawyer.yml",
+  createBaseline: "  - create .srclawyer.inventory.json from a scan of your code",
+  keepBaseline: "  - keep your existing .srclawyer.inventory.json",
+  unchanged: "Your privacy policy will not be changed, and nothing will be committed or pushed.",
+  reports:
+    "The workflow reports what it finds as pull request comments and issues. It never changes your code or your policy, merges, or publishes anything.",
+  prompt: "Create these files? [y/N] ",
+  createdWorkflow: "Created .github/workflows/srclawyer.yml.",
+  createdBaseline: "Created .srclawyer.inventory.json.",
+  keptBaseline: "Kept your existing .srclawyer.inventory.json.",
+  commitIntro: "Nothing has been committed or pushed. To turn the workflow on, commit and push both files:",
+  commitAdd: "  git add .github/workflows/srclawyer.yml .srclawyer.inventory.json",
+  commitCommit: '  git commit -m "Add SrcLawyer privacy review"',
+  commitPush: "  git push",
+  runsOn:
+    "The workflow runs on pull requests, on pushes to {branch}, and once a week. Scheduled runs and issues start only after the workflow is on {branch}, and the repository needs Issues turned on.",
+  stop: "To stop it, delete .github/workflows/srclawyer.yml.",
+  notApproved:
+    'Nothing has been approved yet. When you are ready, ask your AI coding assistant: "Resolve the SrcLawyer privacy review in this project."',
+  notGit: "This folder isn't inside a git repository, so a GitHub workflow can't be set up here. Nothing was written.",
+  exists: ".github/workflows/srclawyer.yml already exists, so it was left alone. Nothing was written.",
+  needsYes: "Nothing was written. Run again with --yes to create these files.",
+  declined: "Nothing was written.",
+  baselineFailed: "The baseline could not be written, so no workflow was created.",
+} as const;

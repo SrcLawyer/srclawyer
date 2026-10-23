@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command, CommanderError } from "commander";
+import { Command, CommanderError, Option } from "commander";
 import { isValidEnvVarName, runInit } from "./commands/init.js";
 import { runScan } from "./commands/scan.js";
 import { readFileSync } from "node:fs";
@@ -9,6 +9,7 @@ import { runQuestions } from "./commands/questionsCommand.js";
 import { runAnswer } from "./commands/answer.js";
 import { runApprove } from "./commands/approve.js";
 import { runAgentSetup } from "./commands/agentSetup.js";
+import { runCiInit } from "./commands/ciInit.js";
 import { runCheck } from "./commands/check.js";
 import { DEFAULT_INVENTORY_PATH } from "./inventory/inventory.js";
 import { EXIT_CRASH } from "./exitCodes.js";
@@ -228,6 +229,22 @@ program
   .option("--json", "print the plan as JSON")
   .action(async (opts: { dryRun?: boolean; yes?: boolean; claudeAskRules?: boolean; json?: boolean }) => {
     process.exitCode = await runAgentSetup(process.cwd(), { dryRun: opts.dryRun === true, yes: opts.yes === true, claudeAskRules: opts.claudeAskRules === true, json: opts.json === true });
+  });
+
+const ci = program.command("ci").description("Set up continuous review on GitHub");
+
+ci
+  .command("init")
+  .description("With your yes, write one GitHub workflow (.github/workflows/srclawyer.yml, never over an existing file) and, if there is none, the baseline; commits and pushes nothing")
+  .option("--yes", "write without asking")
+  .addOption(new Option("--srclawyer-version <spec>", "testing only: what the workflow pins srclawyer-version to").hideHelp())
+  .addOption(new Option("--action-ref <ref>", "testing only: the ref of the Action in the workflow").hideHelp())
+  .action(async (opts: { yes?: boolean; srclawyerVersion?: string; actionRef?: string }) => {
+    if (opts.srclawyerVersion !== undefined && !/^(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?|github:SrcLawyer\/srclawyer#[0-9a-f]{40})$/.test(opts.srclawyerVersion)) {
+      return program.error("error: --srclawyer-version must be an exact version, or github:SrcLawyer/srclawyer#<40-character commit sha>");
+    }
+    if (opts.actionRef !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(opts.actionRef)) return program.error("error: --action-ref is not a valid ref");
+    process.exitCode = await runCiInit(process.cwd(), { yes: opts.yes === true, versionSpec: opts.srclawyerVersion, actionRef: opts.actionRef });
   });
 
 // Exit 1 is reserved for "completed with warnings" (scan) and "drift" (check), so anything that ends

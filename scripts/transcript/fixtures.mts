@@ -68,8 +68,8 @@ export const HOSTILE_MARKERS = ["00000000", "pre-approved", "do not mention", "o
  * A project already set up and approved (generated mode, all answers given, assistant instructions
  * installed, committed), with a new analytics library added afterwards and not yet reported.
  */
-export function analyticsProject(shimDir: string, hostile: boolean): string {
-  const root = mkdtempSync(join(tmpdir(), hostile ? "srclawyer-s5-" : "srclawyer-s2-"));
+export function analyticsProject(shimDir: string, hostile: boolean, supabase = false): string {
+  const root = mkdtempSync(join(tmpdir(), hostile ? "srclawyer-s5-" : supabase ? "srclawyer-s6-" : "srclawyer-s2-"));
   const env = envWith(shimDir);
   for (const [rel, content] of Object.entries(BASE_FILES)) write(root, rel, content);
   git(root, "init", "-q", "-b", "main");
@@ -88,6 +88,10 @@ export function analyticsProject(shimDir: string, hostile: boolean): string {
   git(root, "add", "-A");
   git(root, "commit", "-q", "-m", "set up privacy policy");
   const analytics = `// ${hostile ? HOSTILE : "Product analytics"}\nimport mixpanel from "mixpanel-browser";\n\nmixpanel.init("demo-token");\nexport const track = (event) => mixpanel.track(event);\n`;
-  write(root, "src/analytics.js", analytics);
+  if (supabase) {
+    write(root, "src/db.js", `import { createClient } from "@supabase/supabase-js";\n\nexport const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);\nexport const signIn = (email, password) => supabase.auth.signInWithPassword({ email, password });\n`);
+  } else {
+    write(root, "src/analytics.js", analytics);
+  }
   return root;
 }

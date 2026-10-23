@@ -1,7 +1,23 @@
 // Runs Claude Code headless for one conversation turn and normalises its stream-json output.
 import { spawn } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
-export const CLAUDE = `${process.env.HOME}/Library/Application Support/Claude/claude-code/2.1.299/4fa9694b7975/claude.app/Contents/MacOS/claude`;
+// The desktop app keeps one folder per Claude Code version and moves on when it updates, so use the newest one
+// (or CLAUDE_BIN). The version that ran is printed by run.mts and recorded in docs/transcript-tests.md.
+function findClaude(): string {
+  if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
+  const root = join(process.env.HOME ?? "", "Library/Application Support/Claude/claude-code");
+  const versions = existsSync(root) ? readdirSync(root).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })) : [];
+  for (const version of versions.reverse()) {
+    for (const build of readdirSync(join(root, version))) {
+      const bin = join(root, version, build, "claude.app/Contents/MacOS/claude");
+      if (existsSync(bin)) return bin;
+    }
+  }
+  throw new Error("Claude Code not found; set CLAUDE_BIN");
+}
+export const CLAUDE = findClaude();
 
 export interface ToolCall {
   name: string;

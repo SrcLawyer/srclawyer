@@ -45,8 +45,8 @@ export function parseAnswer(def: QuestionDef, raw: string): Parsed {
 
   switch (def.kind) {
     case "yes_no": {
-      if (/^(true|yes)$/i.test(text)) return { kind: "value", value: true };
-      if (/^(false|no)$/i.test(text)) return { kind: "value", value: false };
+      if (/^(true|yes|y)$/i.test(text)) return { kind: "value", value: true };
+      if (/^(false|no|n)$/i.test(text)) return { kind: "value", value: false };
       throw new AnswerError("invalid-value", "Use true, false or unsure.");
     }
     case "age": {
